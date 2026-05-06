@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Revive Chess HTML</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <section class="board-card">
+      <div class="brand-row">
+        <div>
+          <p class="eyebrow">LOCAL HTML EDITION</p>
+          <h1>Revive Chess</h1>
+        </div>
+        <div id="turnBadge" class="turn-badge">White</div>
+      </div>
+      <div id="board" class="board" aria-label="Revive Chess board"></div>
+      <div class="legend">
+        <span><b class="dot legal"></b>이동</span>
+        <span><b class="dot capture"></b>공격/앙파상</span>
+        <span><b class="dot revive"></b>부활 위치</span>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <p class="eyebrow">MODE</p>
+      <h2>Game Control</h2>
+      <label class="field-label">상대 선택</label>
+      <div class="segmented">
+        <label><input type="radio" name="opponent" value="USER" /> <span>USER</span></label>
+        <label><input type="radio" name="opponent" value="COMPUTER" checked /> <span>COMPUTER</span></label>
+      </div>
+
+      <label class="field-label" for="difficulty">COMPUTER 난이도</label>
+      <select id="difficulty">
+        <option>초급자</option>
+        <option selected>중급자</option>
+        <option>상급자</option>
+      </select>
+      <button id="newGame" class="primary">새 게임</button>
+
+      <div class="stat-card" id="statusText"></div>
+      <div class="score-grid">
+        <div><span>White</span><strong id="whiteScore">0</strong></div>
+        <div><span>Black</span><strong id="blackScore">0</strong></div>
+      </div>
+
+      <h3>부활</h3>
+      <div class="revive-buttons">
+        <button data-revive="P">폰 · 2점</button>
+        <button data-revive="N">나이트 · 6점</button>
+        <button data-revive="B">비숍 · 10점</button>
+        <button data-revive="R">룩 · 10점</button>
+      </div>
+
+      <div class="stat-card small" id="capturedText"></div>
+      <p class="note">게임 로직과 AI 데이터는 이 폴더의 HTML/JS 파일에서 로컬로 실행됩니다. 인터넷 연결이 필요 없습니다.</p>
+    </aside>
+  </main>
+
+  <script src="ai-data.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
