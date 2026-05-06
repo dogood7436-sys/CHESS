@@ -8,6 +8,7 @@ from pathlib import Path
 from .game import ChessGame, Move, ReviveAction, opposite
 
 DATA_PATH = Path(__file__).with_name("ai_data.json")
+DIFFICULTIES = ("초급자", "중급자", "상급자")
 
 
 @dataclass(frozen=True)
@@ -21,8 +22,9 @@ class ComputerAction:
 class ComputerPlayer:
     """Offline computer opponent driven by bundled chess-evaluation data."""
 
-    def __init__(self, color: str, seed: int | None = None) -> None:
+    def __init__(self, color: str, difficulty: str = "중급자", seed: int | None = None) -> None:
         self.color = color
+        self.difficulty = difficulty if difficulty in DIFFICULTIES else "중급자"
         self.random = random.Random(seed)
         self.data = json.loads(DATA_PATH.read_text(encoding="utf-8"))
         self.material: dict[str, int] = self.data["material"]
@@ -30,24 +32,103 @@ class ComputerPlayer:
         self.opening_moves: set[str] = set(self.data["opening_moves"])
 
     def choose_action(self, game: ChessGame) -> ComputerAction:
-        candidates: list[ComputerAction] = []
-        for move in game.legal_moves(self.color):
-            trial = game.clone()
-            trial._apply_move_no_validation(move)
-            score = self.evaluate(trial)
-            if move.uci()[:4] in self.opening_moves and len(game.move_log) < 8:
-                score += 25
-            candidates.append(ComputerAction("move", move=move, score=score))
-        for revive in game.legal_revives(self.color):
-            trial = game.clone()
-            trial._apply_revive_no_validation(revive.piece, self.color)
-            score = self.evaluate(trial) + self.revive_bonus(revive.piece)
-            candidates.append(ComputerAction("revive", revive=revive, score=score))
+        candidates = self.actions_for(game, self.color)
         if not candidates:
             return ComputerAction("none", score=-999999)
-        best_score = max(action.score for action in candidates)
-        best = [action for action in candidates if action.score == best_score]
-        return self.random.choice(best)
+        if self.difficulty == "초급자":
+            return self.random.choice(candidates)
+        if self.difficulty == "상급자":
+            return self.choose_advanced(game, candidates)
+        return self.choose_intermediate(game, candidates)
+
+    def choose_intermediate(self, game: ChessGame, candidates: list[ComputerAction]) -> ComputerAction:
+        scored = [self.score_action(game, action) for action in candidates]
+        top_score = max(action.score for action in scored)
+        top_band = [action for action in scored if action.score >= top_score - 30]
+        return self.random.choice(top_band)
+
+    def choose_advanced(self, game: ChessGame, candidates: list[ComputerAction]) -> ComputerAction:
+        scored: list[ComputerAction] = []
+        for action in candidates:
+            trial = self.apply_action(game, action)
+            score = self.minimax(trial, depth=2, maximizing=trial.turn == self.color, alpha=-999999, beta=999999)
+            score += self.special_move_bonus(action)
+            scored.append(self.with_score(action, score))
+        best_score = max(action.score for action in scored)
+        return self.random.choice([action for action in scored if action.score == best_score])
+
+    def minimax(self, game: ChessGame, depth: int, maximizing: bool, alpha: int, beta: int) -> int:
+        status = game.status()
+        if depth == 0 or status not in {"Playing", "Check"}:
+            return self.terminal_score(game, status)
+        actions = self.actions_for(game, game.turn)
+        if not actions:
+            return self.terminal_score(game, status)
+        if maximizing:
+            value = -999999
+            for action in actions:
+                value = max(value, self.minimax(self.apply_action(game, action), depth - 1, False, alpha, beta))
+                alpha = max(alpha, value)
+                if beta <= alpha:
+                    break
+            return value
+        value = 999999
+        for action in actions:
+            value = min(value, self.minimax(self.apply_action(game, action), depth - 1, True, alpha, beta))
+            beta = min(beta, value)
+            if beta <= alpha:
+                break
+        return value
+
+    def terminal_score(self, game: ChessGame, status: str) -> int:
+        if status.startswith("Checkmate"):
+            winner = opposite(game.turn)
+            return 999999 if winner == self.color else -999999
+        if status.startswith("Draw") or status == "Stalemate":
+            return 0
+        return self.evaluate(game)
+
+    def actions_for(self, game: ChessGame, color: str) -> list[ComputerAction]:
+        actions = [ComputerAction("move", move=move) for move in game.legal_moves(color)]
+        actions.extend(ComputerAction("revive", revive=revive) for revive in game.legal_revives(color))
+        return actions
+
+    def score_action(self, game: ChessGame, action: ComputerAction) -> ComputerAction:
+        trial = self.apply_action(game, action)
+        score = self.evaluate(trial) + self.special_move_bonus(action)
+        if action.move and action.move.uci()[:4] in self.opening_moves and len(game.move_log) < 8:
+            score += 25
+        if self.difficulty == "중급자":
+            score += self.random.randint(-15, 15)
+        return self.with_score(action, score)
+
+    def apply_action(self, game: ChessGame, action: ComputerAction) -> ChessGame:
+        trial = game.clone()
+        if action.kind == "move" and action.move:
+            piece = trial.board[action.move.start[0]][action.move.start[1]]
+            if piece is None:
+                return trial
+            mover = piece[0]
+            trial._apply_move_no_validation(action.move)
+            trial.turn = opposite(mover)
+            trial._finish_turn()
+        elif action.kind == "revive" and action.revive:
+            trial._apply_revive_no_validation(action.revive.piece, action.revive.color)
+            trial.turn = opposite(action.revive.color)
+            trial._finish_turn()
+        return trial
+
+    def with_score(self, action: ComputerAction, score: int) -> ComputerAction:
+        return ComputerAction(action.kind, action.move, action.revive, score)
+
+    def special_move_bonus(self, action: ComputerAction) -> int:
+        if action.kind == "revive" and action.revive:
+            return self.revive_bonus(action.revive.piece)
+        if action.move and action.move.is_castling:
+            return 90
+        if action.move and action.move.is_en_passant:
+            return 45
+        return 0
 
     def evaluate(self, game: ChessGame) -> int:
         score = 0
@@ -63,6 +144,8 @@ class ComputerPlayer:
             score += 40
         if game.in_check(self.color):
             score -= 80
+        if game.is_fifty_move_draw() or game.is_threefold_repetition():
+            score = min(score, 0) if score > 0 else max(score, 0)
         return score
 
     def square_value(self, kind: str, color: str, row: int, col: int) -> int:

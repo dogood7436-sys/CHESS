@@ -19,6 +19,8 @@ class Move:
     start: tuple[int, int]
     end: tuple[int, int]
     promotion: str | None = None
+    is_castling: bool = False
+    is_en_passant: bool = False
 
     def uci(self) -> str:
         return square_name(*self.start) + square_name(*self.end) + (self.promotion or "").lower()
@@ -40,11 +42,20 @@ class ChessGame:
     revives_used: dict[str, dict[str, int]] = field(
         default_factory=lambda: {"w": {"P": 0, "N": 0, "BR": 0}, "b": {"P": 0, "N": 0, "BR": 0}}
     )
+    castling_rights: dict[str, dict[str, bool]] = field(
+        default_factory=lambda: {"w": {"K": True, "Q": True}, "b": {"K": True, "Q": True}}
+    )
+    en_passant_target: tuple[int, int] | None = None
+    halfmove_clock: int = 0
+    fullmove_number: int = 1
+    position_counts: dict[str, int] = field(default_factory=dict)
     move_log: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not self.board:
             self.board = initial_board()
+        if not self.position_counts:
+            self.position_counts[self.position_key()] = 1
 
     def clone(self) -> "ChessGame":
         return deepcopy(self)
@@ -91,10 +102,12 @@ class ChessGame:
         return False
 
     def make_move(self, move: Move) -> None:
-        if move not in self.legal_moves(self.turn):
+        legal = {candidate.uci(): candidate for candidate in self.legal_moves(self.turn)}
+        if move.uci() not in legal:
             raise ValueError("Illegal move")
-        self._apply_move_no_validation(move)
+        self._apply_move_no_validation(legal[move.uci()])
         self.turn = opposite(self.turn)
+        self._finish_turn()
 
     def revive(self, piece: str) -> ReviveAction:
         actions = {action.piece: action for action in self.legal_revives(self.turn)}
@@ -102,9 +115,14 @@ class ChessGame:
             raise ValueError("Illegal revive")
         action = self._apply_revive_no_validation(piece, self.turn)
         self.turn = opposite(self.turn)
+        self._finish_turn()
         return action
 
     def status(self) -> str:
+        if self.is_fifty_move_draw():
+            return "Draw: 50-move rule"
+        if self.is_threefold_repetition():
+            return "Draw: threefold repetition"
         if self.in_check(self.turn):
             if not self.legal_moves(self.turn) and not self.legal_revives(self.turn):
                 return f"Checkmate: {'White' if opposite(self.turn) == 'w' else 'Black'} wins"
@@ -112,6 +130,12 @@ class ChessGame:
         if not self.legal_moves(self.turn) and not self.legal_revives(self.turn):
             return "Stalemate"
         return "Playing"
+
+    def is_fifty_move_draw(self) -> bool:
+        return self.halfmove_clock >= 100
+
+    def is_threefold_repetition(self) -> bool:
+        return self.position_counts.get(self.position_key(), 0) >= 3
 
     def revive_square(self, color: str) -> tuple[int, int] | None:
         king = self.king_square(color)
@@ -147,26 +171,90 @@ class ChessGame:
                             return True
         return False
 
+    def position_key(self) -> str:
+        board_state = "/".join("".join(piece or "--" for piece in row) for row in self.board)
+        rights = "".join(
+            color + side for color in ("w", "b") for side in ("K", "Q") if self.castling_rights[color][side]
+        ) or "-"
+        en_passant = square_name(*self.en_passant_target) if self.en_passant_target else "-"
+        variant = (
+            f"wp{self.points['w']}bp{self.points['b']}|"
+            f"wc{''.join(sorted(self.captured['w']))}|bc{''.join(sorted(self.captured['b']))}|"
+            f"wr{self.revives_used['w']}|br{self.revives_used['b']}"
+        )
+        return f"{board_state} {self.turn} {rights} {en_passant} {variant}"
+
+    def _finish_turn(self) -> None:
+        if self.turn == "w":
+            self.fullmove_number += 1
+        self.position_counts[self.position_key()] = self.position_counts.get(self.position_key(), 0) + 1
+
     def _apply_move_no_validation(self, move: Move) -> None:
         sr, sc = move.start
         er, ec = move.end
         piece = self.board[sr][sc]
-        captured_piece = self.board[er][ec]
         if piece is None:
             raise ValueError("No piece at start square")
+        captured_square = (er, ec)
+        if move.is_en_passant:
+            captured_square = (sr, ec)
+        captured_piece = self.board[captured_square[0]][captured_square[1]]
+
         self.board[sr][sc] = None
+        if move.is_en_passant:
+            self.board[captured_square[0]][captured_square[1]] = None
+
         placed = piece
         if piece[1] == "P" and er in {0, 7}:
             placed = piece[0] + (move.promotion or PROMOTION_PIECE)
         self.board[er][ec] = placed
+
+        if move.is_castling:
+            rook_start_col, rook_end_col = (7, 5) if ec == 6 else (0, 3)
+            rook = self.board[sr][rook_start_col]
+            self.board[sr][rook_start_col] = None
+            self.board[sr][rook_end_col] = rook
+
+        self._update_castling_rights(piece, move.start, captured_piece, captured_square)
+        self.en_passant_target = None
+        if piece[1] == "P" and abs(er - sr) == 2:
+            self.en_passant_target = ((sr + er) // 2, sc)
+
         if captured_piece:
             mover = piece[0]
             captured_color, captured_type = captured_piece[0], captured_piece[1]
             self.points[mover] += CAPTURE_POINTS[captured_type]
             self.captured[captured_color].append(captured_type)
-            self.move_log.append(f"{piece}@{square_name(sr, sc)}x{captured_piece}@{square_name(er, ec)}")
+            marker = " e.p." if move.is_en_passant else ""
+            self.move_log.append(f"{piece}@{square_name(sr, sc)}x{captured_piece}@{square_name(*captured_square)}{marker}")
         else:
-            self.move_log.append(f"{piece}@{square_name(sr, sc)}-{square_name(er, ec)}")
+            castle = " castle" if move.is_castling else ""
+            self.move_log.append(f"{piece}@{square_name(sr, sc)}-{square_name(er, ec)}{castle}")
+
+        self.halfmove_clock = 0 if piece[1] == "P" or captured_piece else self.halfmove_clock + 1
+
+    def _update_castling_rights(
+        self,
+        piece: str,
+        start: tuple[int, int],
+        captured_piece: str | None,
+        captured_square: tuple[int, int],
+    ) -> None:
+        color, kind = piece[0], piece[1]
+        if kind == "K":
+            self.castling_rights[color]["K"] = False
+            self.castling_rights[color]["Q"] = False
+        elif kind == "R":
+            if start == home_rook_square(color, "K"):
+                self.castling_rights[color]["K"] = False
+            elif start == home_rook_square(color, "Q"):
+                self.castling_rights[color]["Q"] = False
+        if captured_piece and captured_piece[1] == "R":
+            captured_color = captured_piece[0]
+            if captured_square == home_rook_square(captured_color, "K"):
+                self.castling_rights[captured_color]["K"] = False
+            elif captured_square == home_rook_square(captured_color, "Q"):
+                self.castling_rights[captured_color]["Q"] = False
 
     def _apply_revive_no_validation(self, piece: str, color: str) -> ReviveAction:
         square = self.revive_square(color)
@@ -182,6 +270,8 @@ class ChessGame:
             self.revives_used[color]["N"] += 1
         else:
             self.revives_used[color]["BR"] += 1
+        self.en_passant_target = None
+        self.halfmove_clock += 1
         self.move_log.append(f"{color}{piece} revived@{square_name(r, c)}")
         return ReviveAction(color, piece, square)
 
@@ -199,12 +289,16 @@ class ChessGame:
             if in_bounds(nr, c) and self.board[nr][c] is None:
                 moves.append(Move((r, c), (nr, c), PROMOTION_PIECE if nr in {0, 7} else None))
                 nnr = r + 2 * direction
-                if r == start_row and self.board[nnr][c] is None:
+                if r == start_row and in_bounds(nnr, c) and self.board[nnr][c] is None:
                     moves.append(Move((r, c), (nnr, c)))
             for dc in (-1, 1):
                 nr, nc = r + direction, c + dc
                 if in_bounds(nr, nc) and self.board[nr][nc] and self.board[nr][nc][0] == enemy and self.board[nr][nc][1] != "K":
                     moves.append(Move((r, c), (nr, nc), PROMOTION_PIECE if nr in {0, 7} else None))
+                if self.en_passant_target == (nr, nc):
+                    captured = self.board[r][nc] if in_bounds(r, nc) else None
+                    if captured == enemy + "P":
+                        moves.append(Move((r, c), (nr, nc), is_en_passant=True))
         elif kind == "N":
             for dr, dc in ((-2, -1), (-2, 1), (-1, -2), (-1, 2), (1, -2), (1, 2), (2, -1), (2, 1)):
                 add_if_valid(moves, self.board, color, r, c, r + dr, c + dc)
@@ -231,6 +325,27 @@ class ChessGame:
                 for dc in (-1, 0, 1):
                     if dr or dc:
                         add_if_valid(moves, self.board, color, r, c, r + dr, c + dc)
+            moves.extend(self._castling_moves(color, r, c))
+        return moves
+
+    def _castling_moves(self, color: str, r: int, c: int) -> list[Move]:
+        if self.in_check(color) or (r, c) != home_king_square(color):
+            return []
+        moves: list[Move] = []
+        for side, king_end_col, between, safe_cols in (
+            ("K", 6, (5, 6), (5, 6)),
+            ("Q", 2, (1, 2, 3), (3, 2)),
+        ):
+            if not self.castling_rights[color][side]:
+                continue
+            rook_square = home_rook_square(color, side)
+            if self.board[rook_square[0]][rook_square[1]] != color + "R":
+                continue
+            if any(self.board[r][col] is not None for col in between):
+                continue
+            if any(self.square_attacked(r, col, opposite(color)) for col in safe_cols):
+                continue
+            moves.append(Move((r, c), (r, king_end_col), is_castling=True))
         return moves
 
     def _attacks_from(self, r: int, c: int) -> Iterable[tuple[int, int]]:
@@ -298,6 +413,15 @@ def add_if_valid(moves: list[Move], board: list[list[str | None]], color: str, s
     target = board[er][ec]
     if target is None or (target[0] != color and target[1] != "K"):
         moves.append(Move((sr, sc), (er, ec)))
+
+
+def home_king_square(color: str) -> tuple[int, int]:
+    return (7, 4) if color == "w" else (0, 4)
+
+
+def home_rook_square(color: str, side: str) -> tuple[int, int]:
+    row = 7 if color == "w" else 0
+    return (row, 7 if side == "K" else 0)
 
 
 def square_name(row: int, col: int) -> str:

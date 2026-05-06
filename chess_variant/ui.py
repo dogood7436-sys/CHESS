@@ -3,8 +3,8 @@ from __future__ import annotations
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from .ai import ComputerPlayer
-from .game import ChessGame, Move, REVIVE_COSTS, UNICODE_PIECES, opposite, square_name
+from .ai import ComputerPlayer, DIFFICULTIES
+from .game import ChessGame, Move, REVIVE_COSTS, UNICODE_PIECES, square_name
 
 LIGHT = "#f0d9b5"
 DARK = "#b58863"
@@ -23,8 +23,9 @@ class ChessVariantApp(tk.Tk):
         self.selected: tuple[int, int] | None = None
         self.legal_targets: dict[tuple[int, int], Move] = {}
         self.opponent_var = tk.StringVar(value="COMPUTOR")
+        self.difficulty_var = tk.StringVar(value="중급자")
         self.human_color = WHITE
-        self.computer: ComputerPlayer | None = ComputerPlayer(BLACK)
+        self.computer: ComputerPlayer | None = ComputerPlayer(BLACK, self.difficulty_var.get())
         self.buttons: list[list[tk.Button]] = []
         self.status_var = tk.StringVar()
         self.points_var = tk.StringVar()
@@ -56,18 +57,27 @@ class ChessVariantApp(tk.Tk):
         ttk.Label(side, text="상대 선택").grid(row=0, column=0, sticky="w")
         ttk.Radiobutton(side, text="USER", variable=self.opponent_var, value="USER", command=self.new_game).grid(row=1, column=0, sticky="w")
         ttk.Radiobutton(side, text="COMPUTOR", variable=self.opponent_var, value="COMPUTOR", command=self.new_game).grid(row=2, column=0, sticky="w")
-        ttk.Button(side, text="새 게임", command=self.new_game).grid(row=3, column=0, sticky="ew", pady=(8, 16))
-        ttk.Label(side, textvariable=self.status_var, wraplength=230).grid(row=4, column=0, sticky="w")
-        ttk.Label(side, textvariable=self.points_var, wraplength=230).grid(row=5, column=0, sticky="w", pady=(8, 0))
-        ttk.Label(side, textvariable=self.captured_var, wraplength=230).grid(row=6, column=0, sticky="w", pady=(8, 0))
-        ttk.Label(side, text="부활").grid(row=7, column=0, sticky="w", pady=(14, 0))
-        for idx, piece in enumerate(("P", "N", "B", "R"), start=8):
+        ttk.Label(side, text="COMPUTOR 난이도").grid(row=3, column=0, sticky="w", pady=(8, 0))
+        difficulty_box = ttk.Combobox(side, textvariable=self.difficulty_var, values=DIFFICULTIES, state="readonly", width=10)
+        difficulty_box.grid(row=4, column=0, sticky="ew")
+        difficulty_box.bind("<<ComboboxSelected>>", lambda _event: self.new_game())
+        ttk.Button(side, text="새 게임", command=self.new_game).grid(row=5, column=0, sticky="ew", pady=(8, 16))
+        ttk.Label(side, textvariable=self.status_var, wraplength=230).grid(row=6, column=0, sticky="w")
+        ttk.Label(side, textvariable=self.points_var, wraplength=230).grid(row=7, column=0, sticky="w", pady=(8, 0))
+        ttk.Label(side, textvariable=self.captured_var, wraplength=230).grid(row=8, column=0, sticky="w", pady=(8, 0))
+        ttk.Label(side, text="부활").grid(row=9, column=0, sticky="w", pady=(14, 0))
+        for idx, piece in enumerate(("P", "N", "B", "R"), start=10):
             ttk.Button(side, text=self.revive_label(piece), command=lambda p=piece: self.on_revive(p)).grid(row=idx, column=0, sticky="ew")
         ttk.Label(
             side,
-            text="잡은 말 점수: 폰 1, 나이트 3, 비숍/룩 5\n부활 비용: 폰 2, 나이트 6, 비숍/룩 10\n부활 위치: 아군 킹의 전방 1칸",
+            text=(
+                "잡은 말 점수: 폰 1, 나이트 3, 비숍/룩 5\n"
+                "부활 비용: 폰 2, 나이트 6, 비숍/룩 10\n"
+                "부활 위치: 아군 킹의 전방 1칸\n"
+                "고급 규칙: 캐슬링, 앙파상, 50수 무승부, 반복 무승부"
+            ),
             wraplength=230,
-        ).grid(row=12, column=0, sticky="w", pady=(14, 0))
+        ).grid(row=14, column=0, sticky="w", pady=(14, 0))
 
     def revive_label(self, piece: str) -> str:
         names = {"P": "폰", "N": "나이트", "B": "비숍", "R": "룩"}
@@ -77,7 +87,7 @@ class ChessVariantApp(tk.Tk):
         self.game = ChessGame()
         self.selected = None
         self.legal_targets = {}
-        self.computer = ComputerPlayer(BLACK) if self.opponent_var.get() == "COMPUTOR" else None
+        self.computer = ComputerPlayer(BLACK, self.difficulty_var.get()) if self.opponent_var.get() == "COMPUTOR" else None
         self.refresh()
 
     def on_square(self, row: int, col: int) -> None:
@@ -133,7 +143,7 @@ class ChessVariantApp(tk.Tk):
 
     def maybe_finish(self) -> None:
         status = self.game.status()
-        if status.startswith("Checkmate") or status == "Stalemate":
+        if status.startswith("Checkmate") or status == "Stalemate" or status.startswith("Draw"):
             messagebox.showinfo("게임 종료", status)
 
     def refresh(self) -> None:
@@ -148,7 +158,12 @@ class ChessVariantApp(tk.Tk):
                     bg = LEGAL
                 button.configure(text=UNICODE_PIECES.get(piece or "", ""), bg=bg, activebackground=bg)
         turn_name = "White" if self.game.turn == WHITE else "Black"
-        self.status_var.set(f"Turn: {turn_name}\nStatus: {self.game.status()}\nRevive square: {self.describe_revive_square()}")
+        difficulty = self.difficulty_var.get() if self.computer else "-"
+        self.status_var.set(
+            f"Turn: {turn_name}\nStatus: {self.game.status()}\n"
+            f"COMPUTOR difficulty: {difficulty}\nRevive square: {self.describe_revive_square()}\n"
+            f"Halfmove clock: {self.game.halfmove_clock}"
+        )
         self.points_var.set(f"Points - White: {self.game.points['w']} / Black: {self.game.points['b']}")
         self.captured_var.set(
             "Captured allies available for revive\n"
