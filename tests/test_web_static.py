@@ -22,3 +22,16 @@ def test_browser_game_has_local_data_and_computer_label() -> None:
     assert "COMPU" + "TOR" not in game
     assert "class ChessGame" in game
     assert "class ComputerPlayer" in game
+
+
+def test_html_board_size_is_fixed_in_css() -> None:
+    css = (WEB / "styles.css").read_text(encoding="utf-8")
+
+    assert "--board-size: 640px" in css
+    assert "--square-size: 80px" in css
+    assert "width: var(--board-size)" in css
+    assert "height: var(--board-size)" in css
+    assert "grid-template-columns: repeat(8, var(--square-size))" in css
+    assert "aspect-ratio" not in css
+    assert "font-size: clamp" not in css
+    assert ".app-shell { grid-template-columns: 1fr" not in css

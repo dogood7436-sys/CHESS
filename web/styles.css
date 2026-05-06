@@ -1,4 +1,8 @@
 :root {
+  --board-size: 640px;
+  --square-size: 80px;
+  --board-border: 12px;
+  --board-card-width: calc(var(--board-size) + (var(--board-border) * 2) + (22px * 2));
   --bg: #07101d;
   --card: #111c2f;
   --panel: #18243a;
@@ -26,9 +30,10 @@ body {
 }
 .app-shell {
   display: grid;
-  grid-template-columns: minmax(680px, 780px) 360px;
+  grid-template-columns: var(--board-card-width) 360px;
   gap: 24px;
-  width: min(1180px, calc(100vw - 32px));
+  width: max-content;
+  min-width: calc(var(--board-card-width) + 360px + 24px);
   margin: 28px auto;
 }
 .board-card, .panel {
@@ -37,7 +42,10 @@ body {
   background: linear-gradient(145deg, rgba(17,28,47,.94), rgba(11,18,31,.92));
   box-shadow: 0 24px 80px rgba(0,0,0,.45), inset 0 1px rgba(255,255,255,.08);
 }
-.board-card { padding: 22px; }
+.board-card {
+  width: var(--board-card-width);
+  padding: 22px;
+}
 .panel { padding: 24px; align-self: start; }
 .brand-row { display:flex; align-items:center; justify-content:space-between; margin-bottom: 16px; }
 h1, h2, h3, p { margin: 0; }
@@ -55,11 +63,18 @@ h3 { margin-top: 18px; margin-bottom: 10px; }
 }
 .board {
   position: relative;
+  box-sizing: content-box;
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  aspect-ratio: 1 / 1;
+  grid-template-columns: repeat(8, var(--square-size));
+  grid-template-rows: repeat(8, var(--square-size));
+  width: var(--board-size);
+  height: var(--board-size);
+  min-width: var(--board-size);
+  min-height: var(--board-size);
+  max-width: var(--board-size);
+  max-height: var(--board-size);
   overflow: hidden;
-  border: 12px solid #d5a657;
+  border: var(--board-border) solid #d5a657;
   border-radius: 22px;
   background: #d5a657;
   box-shadow: inset 0 0 0 2px rgba(255,255,255,.45), 0 28px 70px rgba(0,0,0,.38);
@@ -113,7 +128,7 @@ h3 { margin-top: 18px; margin-bottom: 10px; }
   position: relative;
   z-index: 3;
   font-family: "Segoe UI Symbol", "Noto Sans Symbols 2", serif;
-  font-size: clamp(42px, 6.1vw, 66px);
+  font-size: 58px;
   line-height: 1;
   filter: drop-shadow(0 7px 4px rgba(0,0,0,.35));
   text-shadow: 0 1px rgba(255,255,255,.32);
@@ -178,11 +193,6 @@ button:hover { transform: translateY(-1px); filter: brightness(1.08); }
 .revive-buttons { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .note { margin-top: 18px; color: var(--muted); font-size: 13px; line-height: 1.55; }
 @media (max-width: 1080px) {
-  .app-shell { grid-template-columns: 1fr; }
-}
-@media (max-width: 720px) {
-  .app-shell { width: calc(100vw - 18px); margin: 9px auto; }
-  .board-card, .panel { padding: 14px; border-radius: 20px; }
-  .board { border-width: 7px; border-radius: 16px; }
-  .piece { font-size: clamp(30px, 10vw, 54px); }
+  body { overflow-x: auto; }
+  .app-shell { margin-left: 16px; margin-right: 16px; }
 }
