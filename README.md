@@ -1,0 +1,41 @@
+# Revive Chess
+
+로컬에서 실행되는 Tkinter 기반 체스 변형 게임입니다. 기본 체스 이동 위에, 말을 잡아 포인트를 얻고 잡힌 아군 말을 킹 앞 한 칸에 되살리는 규칙을 추가했습니다.
+
+## 기능
+
+- 상대 선택: `USER`(로컬 2인) 또는 `COMPUTOR`(로컬 AI)를 게임 시작 전/중 선택할 수 있습니다.
+- 오프라인 AI: `chess_variant/ai_data.json`에 저장된 물질 가치, 위치 평가표, 오프닝 선호도, 부활 정책 데이터를 사용해 네트워크 없이 수를 고릅니다.
+- 포인트 규칙:
+  - 폰: 잡을 때 1점 / 부활 비용 2점
+  - 나이트: 잡을 때 3점 / 부활 비용 6점
+  - 비숍, 룩: 잡을 때 5점 / 부활 비용 10점
+  - 퀸은 부활할 수 없습니다.
+- 부활 횟수 제한:
+  - 폰 2회
+  - 나이트 1회
+  - 비숍과 룩을 합쳐 총 1회
+- 부활 위치: 부활한 말은 아군 킹이 상대를 바라보는 방향의 바로 앞 1칸에 생성됩니다. 해당 칸이 비어 있고 부활 후에도 자기 킹이 체크 상태가 아니어야 합니다.
+
+## 로컬 실행
+
+```bash
+python main.py
+```
+
+## Windows EXE 만들기
+
+Windows PC에서 다음 명령을 실행하면 `dist/ReviveChess.exe`가 생성됩니다.
+
+```bash
+python -m pip install pyinstaller
+pyinstaller packaging/ReviveChess.spec
+```
+
+Linux/macOS에서 PyInstaller를 실행하면 해당 OS용 실행 파일이 만들어집니다. Windows `.exe`는 Windows에서 빌드하세요.
+
+## 테스트
+
+```bash
+python -m pytest
+```
