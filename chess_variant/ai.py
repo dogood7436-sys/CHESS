@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import json
 import random
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 from .game import ChessGame, Move, ReviveAction, opposite
 
-DATA_PATH = Path(__file__).with_name("ai_data.json")
+DATA_FILENAME = "ai_data.json"
 DIFFICULTIES = ("초급자", "중급자", "상급자")
 
 
@@ -26,7 +27,7 @@ class ComputerPlayer:
         self.color = color
         self.difficulty = difficulty if difficulty in DIFFICULTIES else "중급자"
         self.random = random.Random(seed)
-        self.data = json.loads(DATA_PATH.read_text(encoding="utf-8"))
+        self.data = json.loads(ai_data_path().read_text(encoding="utf-8"))
         self.material: dict[str, int] = self.data["material"]
         self.piece_square: dict[str, list[int]] = self.data["piece_square"]
         self.opening_moves: set[str] = set(self.data["opening_moves"])
@@ -155,3 +156,12 @@ class ComputerPlayer:
 
     def revive_bonus(self, piece: str) -> int:
         return {"P": 60, "N": 130, "B": 150, "R": 170}.get(piece, 0)
+
+
+def ai_data_path() -> Path:
+    bundled_root = getattr(sys, "_MEIPASS", None)
+    if bundled_root:
+        bundled_path = Path(bundled_root) / "chess_variant" / DATA_FILENAME
+        if bundled_path.exists():
+            return bundled_path
+    return Path(__file__).with_name(DATA_FILENAME)
