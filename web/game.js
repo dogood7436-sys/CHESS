@@ -12,18 +12,15 @@
   const REVIVE_COUNTER_LIMIT = DATA.reviveCounterLimit;
   const CAPTURE_POINTS = DATA.capturePoints;
   const SKILL_CARDS = [
-    { id: 'pawn_forward_strike', name: '정면 돌파 폰', type: '패시브', description: '폰이 한 번 정면의 상대 말을 잡을 수 있습니다.' },
-    { id: 'first_capture_bonus', name: '전리품 회수', type: '패시브', description: '다음 포획으로 얻는 포인트가 1점 증가합니다.' },
-    { id: 'castle_inspiration', name: '왕성의 고무', type: '패시브', description: '캐슬링에 성공하면 즉시 포인트 2점을 얻습니다.' },
-    { id: 'efficient_revive', name: '효율적 소환', type: '패시브', description: '다음 부활 후 사용한 부활 카운터 1칸을 돌려받습니다.' },
-    { id: 'meter_refund', name: '영혼 정화', type: '액티브', description: '사용한 부활 카운터 1칸을 비웁니다.' },
-    { id: 'battle_focus', name: '전투 집중', type: '액티브', description: '즉시 포인트 2점을 얻습니다.' },
-    { id: 'disrupt_enemy_meter', name: '봉인 의식', type: '액티브', description: '상대의 부활 카운터 1칸을 붉게 채웁니다.' },
-    { id: 'point_siphon', name: '전세 흡수', type: '액티브', description: '상대 포인트 1점을 빼앗아 옵니다.' },
-    { id: 'open_revive_lane', name: '부활로 개방', type: '액티브', description: '킹 앞 부활 칸의 아군 말을 가까운 빈 칸으로 이동시킵니다.' },
-    { id: 'last_stand', name: '최후의 결집', type: '액티브', description: '상대보다 포인트가 적거나 같으면 포인트 1점을 얻습니다.' }
+    { id: 'valiant_warrior', name: '용맹한 전사', type: '액티브', uses: '1회 사용 가능', description: '폰이 정면의 상대 말을 잡을 수 있습니다.' },
+    { id: 'wedge_charge', name: '쐐기 돌진', type: '액티브', uses: '1회 사용 가능', description: '나이트가 직선 방향 2칸 안에 있는 말을 잡을 수 있습니다.' },
+    { id: 'brilliant_scheme', name: '비상한 계책', type: '패시브', description: '자신의 부활 카운터가 1개 증가합니다.' },
+    { id: 'wicked_scheme', name: '사악한 술수', type: '패시브', description: '상대의 부활 카운터가 1개 감소합니다.' },
+    { id: 'iron_empress', name: '철혈의 여제', type: '액티브', uses: '1회 사용 가능', description: '퀸이 죽은 턴에 아군 나이트 하나를 지우고 퀸을 킹 앞에서 부활시킵니다.' },
+    { id: 'knight_king', name: '기사왕', type: '액티브', uses: '1회 사용 가능', description: '킹이 직선 거리의 말을 잡을 수 있습니다. 상대 킹에게는 사용할 수 없습니다.' },
+    { id: 'trickster', name: '트릭스터', type: '액티브', uses: '3턴마다 사용 가능', description: '비숍이 직선 거리 한 칸을 이동할 수 있습니다.' },
+    { id: 'destroyer_chariot', name: '파괴전차', type: '패시브', description: '룩이 적 말을 잡으면 다음 자신의 턴까지 상대 룩과 비숍은 자신의 룩을 잡을 수 없습니다.' }
   ];
-
   const clone = (value) => JSON.parse(JSON.stringify(value));
   const opposite = (color) => color === 'w' ? 'b' : 'w';
   const inBounds = (r, c) => r >= 0 && r < 8 && c >= 0 && c < 8;
@@ -32,6 +29,7 @@
   const isPassiveCard = (card) => cardKind(card) === '패시브';
   const randomCardId = () => SKILL_CARDS[Math.floor(Math.random() * SKILL_CARDS.length)].id;
   const randomCards = () => ({ w: randomCardId(), b: randomCardId() });
+  const MOVE_SKILL_CARDS = new Set(['valiant_warrior', 'wedge_charge', 'knight_king', 'trickster']);
   const homeKingSquare = (color) => color === 'w' ? [7, 4] : [0, 4];
   const homeRookSquare = (color, side) => [color === 'w' ? 7 : 0, side === 'K' ? 7 : 0];
 
@@ -64,6 +62,12 @@
       this.revivesUsed = { w: 0, b: 0 };
       this.selectedCards = randomCards();
       this.usedCards = { w: false, b: false };
+      this.activeCardArmed = { w: null, b: null };
+      this.reviveLimitBonus = { w: 0, b: 0 };
+      this.tricksterCooldown = { w: 0, b: 0 };
+      this.rookProtection = { w: 0, b: 0 };
+      this.queenReviveWindow = { w: false, b: false };
+      this.applyAssignedPassiveCards();
       this.castlingRights = { w: { K: true, Q: true }, b: { K: true, Q: true } };
       this.enPassantTarget = null;
       this.halfmoveClock = 0;
@@ -82,6 +86,11 @@
       game.revivesUsed = clone(this.revivesUsed);
       game.selectedCards = clone(this.selectedCards);
       game.usedCards = clone(this.usedCards);
+      game.activeCardArmed = clone(this.activeCardArmed);
+      game.reviveLimitBonus = clone(this.reviveLimitBonus);
+      game.tricksterCooldown = clone(this.tricksterCooldown);
+      game.rookProtection = clone(this.rookProtection);
+      game.queenReviveWindow = clone(this.queenReviveWindow);
       game.castlingRights = clone(this.castlingRights);
       game.enPassantTarget = this.enPassantTarget ? [...this.enPassantTarget] : null;
       game.halfmoveClock = this.halfmoveClock;
@@ -123,7 +132,7 @@
 
     canRevive(color, piece) {
       if (!Object.hasOwn(COSTS, piece) || !this.captured[color].includes(piece)) return false;
-      return this.revivesUsed[color] + COSTS[piece] <= REVIVE_COUNTER_LIMIT;
+      return this.revivesUsed[color] + COSTS[piece] <= this.effectiveReviveLimit(color);
     }
 
     makeMove(move) {
@@ -189,14 +198,47 @@
       const board = this.board.map((row) => row.map((piece) => piece || '--').join('')).join('/');
       const rights = ['wK', 'wQ', 'bK', 'bQ'].filter((right) => this.castlingRights[right[0]][right[1]]).join('') || '-';
       const ep = this.enPassantTarget ? squareName(...this.enPassantTarget) : '-';
-      const variant = `wp${this.points.w}bp${this.points.b}|wc${[...this.captured.w].sort().join('')}|bc${[...this.captured.b].sort().join('')}|wr${JSON.stringify(this.revivesUsed.w)}|br${JSON.stringify(this.revivesUsed.b)}`;
+      const variant = `wp${this.points.w}bp${this.points.b}|wc${[...this.captured.w].sort().join('')}|bc${[...this.captured.b].sort().join('')}|wr${JSON.stringify(this.revivesUsed.w)}|br${JSON.stringify(this.revivesUsed.b)}|rl${JSON.stringify(this.reviveLimitBonus)}`;
       return `${board} ${this.turn} ${rights} ${ep} ${variant}`;
     }
 
     finishTurn() {
+      const previous = opposite(this.turn);
+      this.activeCardArmed[previous] = null;
+      this.queenReviveWindow[previous] = false;
+      if (this.tricksterCooldown[this.turn] > 0) this.tricksterCooldown[this.turn] -= 1;
+      if (this.rookProtection[this.turn] > 0) this.rookProtection[this.turn] -= 1;
       if (this.turn === 'w') this.fullmoveNumber += 1;
       const key = this.positionKey();
       this.positionCounts[key] = (this.positionCounts[key] || 0) + 1;
+    }
+
+    effectiveReviveLimit(color) {
+      return Math.max(0, REVIVE_COUNTER_LIMIT + this.reviveLimitBonus[color]);
+    }
+
+    resetSkillState() {
+      this.usedCards = { w: false, b: false };
+      this.activeCardArmed = { w: null, b: null };
+      this.reviveLimitBonus = { w: 0, b: 0 };
+      this.tricksterCooldown = { w: 0, b: 0 };
+      this.rookProtection = { w: 0, b: 0 };
+      this.queenReviveWindow = { w: false, b: false };
+      this.applyAssignedPassiveCards();
+    }
+
+    applyAssignedPassiveCards() {
+      for (const color of ['w', 'b']) {
+        const card = this.selectedCard(color);
+        if (card?.id === 'brilliant_scheme') {
+          this.reviveLimitBonus[color] += 1;
+          this.usedCards[color] = true;
+        }
+        if (card?.id === 'wicked_scheme') {
+          this.reviveLimitBonus[opposite(color)] -= 1;
+          this.usedCards[color] = true;
+        }
+      }
     }
 
     applyMoveNoValidation(move) {
@@ -214,22 +256,16 @@
         const rookEnd = ec === 6 ? 5 : 3;
         this.board[sr][rookEnd] = this.board[sr][rookStart];
         this.board[sr][rookStart] = null;
-        if (this.hasUnusedCard(piece[0], 'castle_inspiration')) {
-          this.points[piece[0]] += 2;
-          this.consumeCard(piece[0]);
-        }
       }
-      if (move.skillCard) this.consumeCard(piece[0]);
+      if (move.skillCard) this.consumeSkillCard(piece[0], move.skillCard);
       this.updateCastlingRights(piece, move.start, capturedPiece, capturedSquare);
       this.enPassantTarget = null;
       if (piece[1] === 'P' && Math.abs(er - sr) === 2) this.enPassantTarget = [(sr + er) / 2, sc];
       if (capturedPiece) {
         this.points[piece[0]] += CAPTURE_POINTS[capturedPiece[1]] || 0;
-        if (this.hasUnusedCard(piece[0], 'first_capture_bonus')) {
-          this.points[piece[0]] += 1;
-          this.consumeCard(piece[0]);
-        }
         this.captured[capturedPiece[0]].push(capturedPiece[1]);
+        if (capturedPiece[1] === 'Q') this.queenReviveWindow[capturedPiece[0]] = true;
+        if (piece[1] === 'R' && this.selectedCards[piece[0]] === 'destroyer_chariot') this.rookProtection[piece[0]] = 1;
         this.moveLog.push(`${piece}@${squareName(sr, sc)}x${capturedPiece}@${squareName(...capturedSquare)}`);
       } else {
         this.moveLog.push(`${piece}@${squareName(sr, sc)}-${squareName(er, ec)}`);
@@ -259,10 +295,6 @@
       this.board[r][c] = `${color}${piece}`;
       this.captured[color].splice(this.captured[color].indexOf(piece), 1);
       this.revivesUsed[color] += COSTS[piece];
-      if (this.hasUnusedCard(color, 'efficient_revive')) {
-        this.revivesUsed[color] = Math.max(0, this.revivesUsed[color] - 1);
-        this.consumeCard(color);
-      }
       this.enPassantTarget = null;
       this.halfmoveClock += 1;
       this.moveLog.push(`${color}${piece} revived@${squareName(r, c)}`);
@@ -292,11 +324,23 @@
             moves.push(new Move([r, c], [nr, nc], { isEnPassant: true }));
           }
         }
-        if (this.hasUnusedCard(color, 'pawn_forward_strike') && inBounds(nr, c) && this.board[nr][c]?.[0] === enemy && this.board[nr][c][1] !== 'K') {
-          moves.push(new Move([r, c], [nr, c], { promotion: (nr === 0 || nr === 7) ? 'Q' : null, skillCard: 'pawn_forward_strike' }));
+        if (this.cardReady(color, 'valiant_warrior') && inBounds(nr, c) && this.board[nr][c]?.[0] === enemy && this.board[nr][c][1] !== 'K') {
+          moves.push(new Move([r, c], [nr, c], { promotion: (nr === 0 || nr === 7) ? 'Q' : null, skillCard: 'valiant_warrior' }));
         }
       } else if (kind === 'N') {
-        for (const [dr, dc] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]) this.addIfValid(moves, color, r, c, r + dr, c + dc);
+        for (const [dr, dc] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]) this.addIfValid(moves, color, kind, r, c, r + dr, c + dc);
+        if (this.cardReady(color, 'wedge_charge')) {
+          for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+            for (const distance of [1, 2]) {
+              const tr = r + dr * distance, tc = c + dc * distance;
+              if (!inBounds(tr, tc)) break;
+              const target = this.board[tr][tc];
+              if (!target) continue;
+              if (target[0] === enemy && target[1] !== 'K') moves.push(new Move([r, c], [tr, tc], { skillCard: 'wedge_charge' }));
+              break;
+            }
+          }
+        }
       } else if (['B', 'R', 'Q'].includes(kind)) {
         const dirs = [];
         if (kind === 'B' || kind === 'Q') dirs.push([-1,-1],[-1,1],[1,-1],[1,1]);
@@ -307,23 +351,45 @@
             const target = this.board[nr2][nc2];
             if (!target) moves.push(new Move([r, c], [nr2, nc2]));
             else {
-              if (target[0] !== color && target[1] !== 'K') moves.push(new Move([r, c], [nr2, nc2]));
+              if (target[0] !== color && target[1] !== 'K' && !this.protectedRookCaptureBlocked(kind, target)) moves.push(new Move([r, c], [nr2, nc2]));
               break;
             }
             nr2 += dr; nc2 += dc;
           }
         }
+        if (kind === 'B' && this.cardReady(color, 'trickster')) {
+          for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) this.addIfValid(moves, color, kind, r, c, r + dr, c + dc, 'trickster');
+        }
       } else if (kind === 'K') {
-        for (const dr of [-1, 0, 1]) for (const dc of [-1, 0, 1]) if (dr || dc) this.addIfValid(moves, color, r, c, r + dr, c + dc);
+        for (const dr of [-1, 0, 1]) for (const dc of [-1, 0, 1]) if (dr || dc) this.addIfValid(moves, color, kind, r, c, r + dr, c + dc);
+        if (this.cardReady(color, 'knight_king')) {
+          for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+            let tr = r + dr, tc = c + dc;
+            while (inBounds(tr, tc)) {
+              const target = this.board[tr][tc];
+              if (target) {
+                if (target[0] === enemy && target[1] !== 'K') moves.push(new Move([r, c], [tr, tc], { skillCard: 'knight_king' }));
+                break;
+              }
+              tr += dr; tc += dc;
+            }
+          }
+        }
         moves.push(...this.castlingMoves(color, r, c));
       }
       return moves;
     }
 
-    addIfValid(moves, color, sr, sc, er, ec) {
+    protectedRookCaptureBlocked(attackerKind, target) {
+      return ['B', 'R'].includes(attackerKind) && target?.[1] === 'R' && this.rookProtection[target[0]] > 0;
+    }
+
+    addIfValid(moves, color, attackerKind, sr, sc, er, ec, skillCard = null) {
       if (!inBounds(er, ec)) return;
       const target = this.board[er][ec];
-      if (!target || (target[0] !== color && target[1] !== 'K')) moves.push(new Move([sr, sc], [er, ec]));
+      if (!target || (target[0] !== color && target[1] !== 'K' && !this.protectedRookCaptureBlocked(attackerKind, target))) {
+        moves.push(new Move([sr, sc], [er, ec], { skillCard }));
+      }
     }
 
     castlingMoves(color, r, c) {
@@ -373,7 +439,23 @@
       return !this.usedCards[color] && (!id || this.selectedCards[color] === id);
     }
 
+    cardReady(color, id) {
+      if (this.selectedCards[color] !== id) return false;
+      if (id === 'trickster') return this.activeCardArmed[color] === id && this.tricksterCooldown[color] === 0;
+      return this.activeCardArmed[color] === id && !this.usedCards[color];
+    }
+
     consumeCard(color) {
+      this.usedCards[color] = true;
+      this.activeCardArmed[color] = null;
+    }
+
+    consumeSkillCard(color, id) {
+      this.activeCardArmed[color] = null;
+      if (id === 'trickster') {
+        this.tricksterCooldown[color] = 3;
+        return;
+      }
       this.usedCards[color] = true;
     }
 
@@ -383,48 +465,39 @@
 
     activateCard(color) {
       const card = this.selectedCard(color);
-      if (!card || this.usedCards[color]) return { ok: false, message: '이미 사용한 기술 카드입니다.' };
-      if (isPassiveCard(card)) return { ok: false, message: '이 카드는 조건이 맞는 행동을 할 때 자동 발동됩니다.' };
-      const enemy = opposite(color);
-      switch (card.id) {
-        case 'meter_refund':
-          if (this.revivesUsed[color] <= 0) return { ok: false, message: '비울 부활 카운터가 없습니다.' };
-          this.revivesUsed[color] = Math.max(0, this.revivesUsed[color] - 1);
-          break;
-        case 'battle_focus':
-          this.points[color] += 2;
-          break;
-        case 'disrupt_enemy_meter':
-          if (this.revivesUsed[enemy] >= REVIVE_COUNTER_LIMIT) return { ok: false, message: '상대 부활 카운터가 이미 가득 찼습니다.' };
-          this.revivesUsed[enemy] = Math.min(REVIVE_COUNTER_LIMIT, this.revivesUsed[enemy] + 1);
-          break;
-        case 'point_siphon':
-          if (this.points[enemy] <= 0) return { ok: false, message: '빼앗을 상대 포인트가 없습니다.' };
-          this.points[enemy] -= 1;
-          this.points[color] += 1;
-          break;
-        case 'open_revive_lane': {
-          const square = this.reviveSquare(color);
-          if (!square) return { ok: false, message: '부활 칸이 없습니다.' };
-          const [r, c] = square;
-          const blocker = this.board[r][c];
-          if (!blocker || blocker[0] !== color || blocker[1] === 'K') return { ok: false, message: '이동시킬 아군 말이 부활 칸에 없습니다.' };
-          const target = this.nearestEmptySquare(r, c);
-          if (!target) return { ok: false, message: '이동 가능한 빈 칸이 없습니다.' };
-          this.board[target[0]][target[1]] = blocker;
-          this.board[r][c] = null;
-          break;
-        }
-        case 'last_stand':
-          if (this.points[color] > this.points[enemy]) return { ok: false, message: '상대보다 포인트가 많을 때는 사용할 수 없습니다.' };
-          this.points[color] += 1;
-          break;
-        default:
-          return { ok: false, message: '아직 구현되지 않은 카드입니다.' };
+      if (!card) return { ok: false, message: '기술 카드가 없습니다.' };
+      if (isPassiveCard(card)) return { ok: false, message: '패시브 카드는 조건에 따라 자동 적용됩니다.' };
+      if (card.id === 'trickster' && this.tricksterCooldown[color] > 0) return { ok: false, message: `트릭스터 재사용까지 ${this.tricksterCooldown[color]}턴 남았습니다.` };
+      if (card.id !== 'trickster' && this.usedCards[color]) return { ok: false, message: '이미 사용한 기술 카드입니다.' };
+      if (MOVE_SKILL_CARDS.has(card.id)) {
+        this.activeCardArmed[color] = card.id;
+        return { ok: true, message: `${card.name} 발동 준비! 기술 이동할 말을 선택하세요.` };
       }
-      this.consumeCard(color);
-      this.moveLog.push(`${color} card:${card.name}`);
-      return { ok: true, message: `${card.name} 발동!` };
+      if (card.id === 'iron_empress') {
+        const square = this.reviveSquare(color);
+        if (!this.queenReviveWindow[color]) return { ok: false, message: '퀸이 죽은 바로 다음 턴에만 사용할 수 있습니다.' };
+        if (!square || this.board[square[0]][square[1]]) return { ok: false, message: '킹 앞 부활 칸이 비어 있지 않습니다.' };
+        if (!this.captured[color].includes('Q')) return { ok: false, message: '부활시킬 퀸이 잡힌 말 목록에 없습니다.' };
+        const knightSquare = this.findOwnPiece(color, 'N');
+        if (!knightSquare) return { ok: false, message: '대신 지울 아군 나이트가 없습니다.' };
+        this.board[knightSquare[0]][knightSquare[1]] = null;
+        this.captured[color].splice(this.captured[color].indexOf('Q'), 1);
+        this.board[square[0]][square[1]] = `${color}Q`;
+        this.queenReviveWindow[color] = false;
+        this.consumeCard(color);
+        this.moveLog.push(`${color} card:${card.name}`);
+        return { ok: true, message: `${card.name} 발동!` };
+      }
+      return { ok: false, message: '아직 구현되지 않은 카드입니다.' };
+    }
+
+    findOwnPiece(color, kind) {
+      for (let r = 0; r < 8; r += 1) {
+        for (let c = 0; c < 8; c += 1) {
+          if (this.board[r][c] === `${color}${kind}`) return [r, c];
+        }
+      }
+      return null;
     }
 
     nearestEmptySquare(row, col) {
@@ -635,7 +708,7 @@
       this.selected = null;
       this.legalTargets = new Map();
       this.game.selectedCards = randomCards();
-      this.game.usedCards = { w: false, b: false };
+      this.game.resetSkillState();
       this.computer = this.opponentValue() === 'COMPUTER' ? new ComputerPlayer('b', this.difficultyValue()) : null;
       this.render();
     }
@@ -727,7 +800,8 @@
       document.querySelector('#blackScore').textContent = this.game.points.b;
       this.statusEl.textContent = `Turn: ${turn}\nStatus: ${this.game.status()}\nCOMPUTER difficulty: ${this.computer ? this.difficultyValue() : '-'}\nRevive square: ${this.describeReviveSquare()}\nHalfmove clock: ${this.game.halfmoveClock}`;
       this.cardTextEl.textContent = this.cardStatusText();
-      this.activateCardButton.disabled = this.isComputerTurn() || this.game.usedCards[this.game.turn] || isPassiveCard(this.game.selectedCard(this.game.turn));
+      const currentCard = this.game.selectedCard(this.game.turn);
+      this.activateCardButton.disabled = this.isComputerTurn() || isPassiveCard(currentCard) || this.game.activeCardArmed[this.game.turn] || (currentCard?.id === 'trickster' ? this.game.tricksterCooldown[this.game.turn] > 0 : this.game.usedCards[this.game.turn]);
       this.audio.updateBgm(this.totalPoints());
       this.capturedEl.textContent = `Captured allies available for revive\nWhite: ${JSON.stringify(this.game.captured.w)}\nBlack: ${JSON.stringify(this.game.captured.b)}\nRevive counters W: ${this.reviveCounterText('w')}\nRevive counters B: ${this.reviveCounterText('b')}`;
       this.updateReviveButtons();
@@ -736,25 +810,33 @@
     cardStatusText() {
       const line = (color, label) => {
         const card = this.game.selectedCard(color);
-        return `${label}: ${card?.name || '-'} · ${cardKind(card)} · ${this.game.usedCards[color] ? '사용 완료' : isPassiveCard(card) ? '자동 발동 대기' : '사용 가능'}
+        const state = this.cardUseState(color, card);
+        return `${label}: ${card?.name || '-'} · ${cardKind(card)}${card?.uses ? ` · ${card.uses}` : ''} · ${state}
 ${card?.description || ''}`;
       };
       return `${line('w', 'White')}
 
 ${line('b', 'Black')}`;
     }
+    cardUseState(color, card) {
+      if (!card) return '-';
+      if (this.game.activeCardArmed[color]) return '발동 중';
+      if (card.id === 'trickster' && this.game.tricksterCooldown[color] > 0) return `${this.game.tricksterCooldown[color]}턴 후 사용 가능`;
+      if (isPassiveCard(card)) return this.game.usedCards[color] ? '적용 완료' : '상시 적용';
+      return this.game.usedCards[color] ? '사용 완료' : '사용 가능';
+    }
     reviveRemaining(color) {
-      return Math.max(0, REVIVE_COUNTER_LIMIT - this.game.revivesUsed[color]);
+      return Math.max(0, this.game.effectiveReviveLimit(color) - this.game.revivesUsed[color]);
     }
     reviveCounterText(color) {
-      return `${this.reviveMeterHtml(color)} (${this.game.revivesUsed[color]}/${REVIVE_COUNTER_LIMIT})`;
+      return `${this.reviveMeterHtml(color)} (${this.game.revivesUsed[color]}/${this.game.effectiveReviveLimit(color)})`;
     }
     reviveMeterHtml(color) {
-      return [...Array(REVIVE_COUNTER_LIMIT)].map((_, index) => index < this.game.revivesUsed[color] ? '●' : '○').join('');
+      return [...Array(this.game.effectiveReviveLimit(color))].map((_, index) => index < this.game.revivesUsed[color] ? '●' : '○').join('');
     }
     renderReviveMeter() {
       this.reviveMeterEl.innerHTML = '';
-      for (let index = 0; index < REVIVE_COUNTER_LIMIT; index += 1) {
+      for (let index = 0; index < this.game.effectiveReviveLimit(this.game.turn); index += 1) {
         const circle = document.createElement('span');
         circle.className = `meter-circle ${index < this.game.revivesUsed[this.game.turn] ? 'used' : 'empty'}`;
         this.reviveMeterEl.append(circle);
