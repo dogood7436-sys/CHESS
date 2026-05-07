@@ -55,7 +55,9 @@ def test_web_revive_ui_has_counters_and_check_lockout() -> None:
     assert ".cost-circle.needed" in css
     assert ".public-revive-row" in css
     assert "ornate-board-frame" in css
-    assert "radial-gradient(circle at 50% 42%" in css
+    assert "--apple-blue" in css
+    assert "backdrop-filter: blur(30px) saturate(1.45)" in css
+    assert "-apple-system" in css
     assert ".meter-circle.used" in css
 
 
@@ -99,6 +101,10 @@ def test_web_has_requested_hidden_skill_cards_and_kill_point_reward() -> None:
     assert "this.points[color] >= 20" in game_js
     assert "cardSlots" in game_js
     assert "비공개" in game_js
+    assert "const visible = slot.revealed || slot.used" in game_js
+    assert "color === this.game.turn || slot.revealed" not in game_js
+    assert "비공개 카드 ${index + 1} 발동" in game_js
+    assert "button.textContent = `${card.name} 발동`" not in game_js
     assert "cardButtons" in game_js
     assert "selectedCardsFromUi" not in game_js
     assert "pawn_forward_strike" not in game_js

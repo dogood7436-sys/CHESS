@@ -802,7 +802,7 @@
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'card-action';
-        button.textContent = `${card.name} 발동`;
+        button.textContent = slot.revealed || slot.used ? `${card.name} 발동` : `비공개 카드 ${index + 1} 발동`;
         button.disabled = this.isComputerTurn() || card.used || this.game.activeCardArmed[this.game.turn] || !this.cardActivatable(this.game.turn, card);
         button.addEventListener('click', () => this.onActivateCard(index));
         this.cardButtonsEl.append(button);
@@ -817,7 +817,7 @@
       const line = (color, label) => {
         const cards = this.game.cardSlots[color].map((slot, index) => {
           const card = this.game.cardAt(color, index);
-          const visible = color === this.game.turn || slot.revealed || slot.used;
+          const visible = slot.revealed || slot.used;
           if (!visible) return `카드 ${index + 1}: 비공개`;
           return `카드 ${index + 1}: ${card.name} · ${cardKind(card)} · ${card.uses} · ${this.cardUseState(color, card)}\n${card.description}`;
         }).join('\n');
