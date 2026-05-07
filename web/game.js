@@ -12,22 +12,26 @@
   const REVIVE_COUNTER_LIMIT = DATA.reviveCounterLimit;
   const CAPTURE_POINTS = DATA.capturePoints;
   const SKILL_CARDS = [
-    { id: 'pawn_forward_strike', name: '정면 돌파 폰', description: '폰이 단 한 번 정면의 상대 말을 잡을 수 있습니다.', passive: true },
-    { id: 'supply_pawn', name: '예비 폰', description: '부활 대기 목록에 폰 1개를 추가합니다.' },
-    { id: 'supply_knight', name: '기사의 귀환', description: '부활 대기 목록에 나이트 1개를 추가합니다.' },
-    { id: 'supply_bishop', name: '주교의 비밀 통로', description: '부활 대기 목록에 비숍 1개를 추가합니다.' },
-    { id: 'supply_rook', name: '성채 재건', description: '부활 대기 목록에 룩 1개를 추가합니다.' },
-    { id: 'meter_refund', name: '영혼 정화', description: '사용한 부활 카운터 1칸을 비웁니다.' },
-    { id: 'battle_focus', name: '전투 집중', description: '즉시 포인트 2점을 얻습니다.' },
-    { id: 'disrupt_enemy_meter', name: '봉인 의식', description: '상대의 부활 카운터 1칸을 붉게 채웁니다.' },
-    { id: 'point_siphon', name: '전세 흡수', description: '상대 포인트 1점을 빼앗아 옵니다.' },
-    { id: 'open_revive_lane', name: '부활로 개방', description: '킹 앞 부활 칸의 아군 말을 가까운 빈 칸으로 이동시킵니다.' }
+    { id: 'pawn_forward_strike', name: '정면 돌파 폰', type: '패시브', description: '폰이 한 번 정면의 상대 말을 잡을 수 있습니다.' },
+    { id: 'first_capture_bonus', name: '전리품 회수', type: '패시브', description: '다음 포획으로 얻는 포인트가 1점 증가합니다.' },
+    { id: 'castle_inspiration', name: '왕성의 고무', type: '패시브', description: '캐슬링에 성공하면 즉시 포인트 2점을 얻습니다.' },
+    { id: 'efficient_revive', name: '효율적 소환', type: '패시브', description: '다음 부활 후 사용한 부활 카운터 1칸을 돌려받습니다.' },
+    { id: 'meter_refund', name: '영혼 정화', type: '액티브', description: '사용한 부활 카운터 1칸을 비웁니다.' },
+    { id: 'battle_focus', name: '전투 집중', type: '액티브', description: '즉시 포인트 2점을 얻습니다.' },
+    { id: 'disrupt_enemy_meter', name: '봉인 의식', type: '액티브', description: '상대의 부활 카운터 1칸을 붉게 채웁니다.' },
+    { id: 'point_siphon', name: '전세 흡수', type: '액티브', description: '상대 포인트 1점을 빼앗아 옵니다.' },
+    { id: 'open_revive_lane', name: '부활로 개방', type: '액티브', description: '킹 앞 부활 칸의 아군 말을 가까운 빈 칸으로 이동시킵니다.' },
+    { id: 'last_stand', name: '최후의 결집', type: '액티브', description: '상대보다 포인트가 적거나 같으면 포인트 1점을 얻습니다.' }
   ];
 
   const clone = (value) => JSON.parse(JSON.stringify(value));
   const opposite = (color) => color === 'w' ? 'b' : 'w';
   const inBounds = (r, c) => r >= 0 && r < 8 && c >= 0 && c < 8;
   const squareName = (r, c) => `${FILES[c]}${8 - r}`;
+  const cardKind = (card) => card?.type || '액티브';
+  const isPassiveCard = (card) => cardKind(card) === '패시브';
+  const randomCardId = () => SKILL_CARDS[Math.floor(Math.random() * SKILL_CARDS.length)].id;
+  const randomCards = () => ({ w: randomCardId(), b: randomCardId() });
   const homeKingSquare = (color) => color === 'w' ? [7, 4] : [0, 4];
   const homeRookSquare = (color, side) => [color === 'w' ? 7 : 0, side === 'K' ? 7 : 0];
 
@@ -58,7 +62,7 @@
       this.points = { w: 0, b: 0 };
       this.captured = { w: [], b: [] };
       this.revivesUsed = { w: 0, b: 0 };
-      this.selectedCards = { w: 'pawn_forward_strike', b: 'supply_pawn' };
+      this.selectedCards = randomCards();
       this.usedCards = { w: false, b: false };
       this.castlingRights = { w: { K: true, Q: true }, b: { K: true, Q: true } };
       this.enPassantTarget = null;
@@ -210,6 +214,10 @@
         const rookEnd = ec === 6 ? 5 : 3;
         this.board[sr][rookEnd] = this.board[sr][rookStart];
         this.board[sr][rookStart] = null;
+        if (this.hasUnusedCard(piece[0], 'castle_inspiration')) {
+          this.points[piece[0]] += 2;
+          this.consumeCard(piece[0]);
+        }
       }
       if (move.skillCard) this.consumeCard(piece[0]);
       this.updateCastlingRights(piece, move.start, capturedPiece, capturedSquare);
@@ -217,6 +225,10 @@
       if (piece[1] === 'P' && Math.abs(er - sr) === 2) this.enPassantTarget = [(sr + er) / 2, sc];
       if (capturedPiece) {
         this.points[piece[0]] += CAPTURE_POINTS[capturedPiece[1]] || 0;
+        if (this.hasUnusedCard(piece[0], 'first_capture_bonus')) {
+          this.points[piece[0]] += 1;
+          this.consumeCard(piece[0]);
+        }
         this.captured[capturedPiece[0]].push(capturedPiece[1]);
         this.moveLog.push(`${piece}@${squareName(sr, sc)}x${capturedPiece}@${squareName(...capturedSquare)}`);
       } else {
@@ -247,6 +259,10 @@
       this.board[r][c] = `${color}${piece}`;
       this.captured[color].splice(this.captured[color].indexOf(piece), 1);
       this.revivesUsed[color] += COSTS[piece];
+      if (this.hasUnusedCard(color, 'efficient_revive')) {
+        this.revivesUsed[color] = Math.max(0, this.revivesUsed[color] - 1);
+        this.consumeCard(color);
+      }
       this.enPassantTarget = null;
       this.halfmoveClock += 1;
       this.moveLog.push(`${color}${piece} revived@${squareName(r, c)}`);
@@ -368,21 +384,9 @@
     activateCard(color) {
       const card = this.selectedCard(color);
       if (!card || this.usedCards[color]) return { ok: false, message: '이미 사용한 기술 카드입니다.' };
-      if (card.passive) return { ok: false, message: '이 카드는 조건이 맞는 이동을 할 때 자동 발동됩니다.' };
+      if (isPassiveCard(card)) return { ok: false, message: '이 카드는 조건이 맞는 행동을 할 때 자동 발동됩니다.' };
       const enemy = opposite(color);
       switch (card.id) {
-        case 'supply_pawn':
-          this.captured[color].push('P');
-          break;
-        case 'supply_knight':
-          this.captured[color].push('N');
-          break;
-        case 'supply_bishop':
-          this.captured[color].push('B');
-          break;
-        case 'supply_rook':
-          this.captured[color].push('R');
-          break;
         case 'meter_refund':
           if (this.revivesUsed[color] <= 0) return { ok: false, message: '비울 부활 카운터가 없습니다.' };
           this.revivesUsed[color] = Math.max(0, this.revivesUsed[color] - 1);
@@ -411,6 +415,10 @@
           this.board[r][c] = null;
           break;
         }
+        case 'last_stand':
+          if (this.points[color] > this.points[enemy]) return { ok: false, message: '상대보다 포인트가 많을 때는 사용할 수 없습니다.' };
+          this.points[color] += 1;
+          break;
         default:
           return { ok: false, message: '아직 구현되지 않은 카드입니다.' };
       }
@@ -609,11 +617,9 @@
       this.reviveMeterEl = document.querySelector('#reviveMeter');
       this.reviveButtons = new Map([...document.querySelectorAll('[data-revive]')].map((button) => [button.dataset.revive, button]));
       this.bindEvents();
-      this.game.selectedCards = this.selectedCardsFromUi();
       this.render();
     }
     bindEvents() {
-      this.populateCardSelects();
       document.querySelector('#newGame').addEventListener('click', () => this.newGame());
       document.querySelector('#enableSound').addEventListener('click', () => { this.audio.ensure(); this.audio.updateBgm(this.totalPoints()); });
       this.activateCardButton.addEventListener('click', () => this.onActivateCard());
@@ -621,27 +627,14 @@
       document.querySelectorAll('input[name="opponent"]').forEach((input) => input.addEventListener('change', () => this.newGame()));
       document.querySelectorAll('[data-revive]').forEach((button) => button.addEventListener('click', () => this.onRevive(button.dataset.revive)));
     }
-    populateCardSelects() {
-      for (const select of [document.querySelector('#whiteCard'), document.querySelector('#blackCard')]) {
-        select.innerHTML = '';
-        for (const card of SKILL_CARDS) {
-          const option = document.createElement('option');
-          option.value = card.id;
-          option.textContent = `${card.name} — ${card.description}`;
-          select.append(option);
-        }
-      }
-      document.querySelector('#blackCard').value = 'supply_pawn';
-    }
     opponentValue() { return document.querySelector('input[name="opponent"]:checked').value; }
     difficultyValue() { return document.querySelector('#difficulty').value; }
-    selectedCardsFromUi() { return { w: document.querySelector('#whiteCard').value, b: document.querySelector('#blackCard').value }; }
     totalPoints() { return this.game.points.w + this.game.points.b; }
     newGame() {
       this.game = new ChessGame();
       this.selected = null;
       this.legalTargets = new Map();
-      this.game.selectedCards = this.selectedCardsFromUi();
+      this.game.selectedCards = randomCards();
       this.game.usedCards = { w: false, b: false };
       this.computer = this.opponentValue() === 'COMPUTER' ? new ComputerPlayer('b', this.difficultyValue()) : null;
       this.render();
@@ -703,7 +696,7 @@
     computerTurn() {
       if (!this.isComputerTurn()) return;
       const card = this.game.selectedCard(this.game.turn);
-      if (card && !card.passive && !this.game.usedCards[this.game.turn]) {
+      if (card && !isPassiveCard(card) && !this.game.usedCards[this.game.turn]) {
         const cardResult = this.game.activateCard(this.game.turn);
         if (cardResult.ok) this.audio.play('card');
       }
@@ -734,7 +727,7 @@
       document.querySelector('#blackScore').textContent = this.game.points.b;
       this.statusEl.textContent = `Turn: ${turn}\nStatus: ${this.game.status()}\nCOMPUTER difficulty: ${this.computer ? this.difficultyValue() : '-'}\nRevive square: ${this.describeReviveSquare()}\nHalfmove clock: ${this.game.halfmoveClock}`;
       this.cardTextEl.textContent = this.cardStatusText();
-      this.activateCardButton.disabled = this.isComputerTurn() || this.game.usedCards[this.game.turn] || this.game.selectedCard(this.game.turn)?.passive;
+      this.activateCardButton.disabled = this.isComputerTurn() || this.game.usedCards[this.game.turn] || isPassiveCard(this.game.selectedCard(this.game.turn));
       this.audio.updateBgm(this.totalPoints());
       this.capturedEl.textContent = `Captured allies available for revive\nWhite: ${JSON.stringify(this.game.captured.w)}\nBlack: ${JSON.stringify(this.game.captured.b)}\nRevive counters W: ${this.reviveCounterText('w')}\nRevive counters B: ${this.reviveCounterText('b')}`;
       this.updateReviveButtons();
@@ -743,7 +736,7 @@
     cardStatusText() {
       const line = (color, label) => {
         const card = this.game.selectedCard(color);
-        return `${label}: ${card?.name || '-'} · ${this.game.usedCards[color] ? '사용 완료' : card?.passive ? '자동 발동 대기' : '사용 가능'}
+        return `${label}: ${card?.name || '-'} · ${cardKind(card)} · ${this.game.usedCards[color] ? '사용 완료' : isPassiveCard(card) ? '자동 발동 대기' : '사용 가능'}
 ${card?.description || ''}`;
       };
       return `${line('w', 'White')}

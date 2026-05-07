@@ -45,6 +45,21 @@ def test_shared_five_count_revive_meter_blocks_overflow() -> None:
     assert not game.can_revive("w", "P")
 
 
+def test_same_piece_can_revive_repeatedly_when_counter_allows() -> None:
+    game = ChessGame()
+    game.board[6][4] = None
+    game.captured["w"] = ["N", "N"]
+
+    first = game.revive("N")
+    game.turn = "w"
+    game.board[6][4] = None
+    second = game.revive("N")
+
+    assert first.piece == second.piece == "N"
+    assert game.revives_used["w"] == 4
+    assert game.captured["w"] == []
+
+
 def test_rook_uses_three_count_and_queen_cannot_be_revived() -> None:
     game = ChessGame()
     game.board[6][4] = None

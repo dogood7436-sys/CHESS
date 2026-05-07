@@ -62,16 +62,25 @@ def test_web_uses_shared_five_count_revive_system() -> None:
     assert 'data-revive="Q"' not in html
 
 
-def test_web_has_ten_skill_cards_and_audio_system() -> None:
+def test_web_has_ten_random_skill_cards_and_audio_system() -> None:
     game_js = (WEB / "game.js").read_text(encoding="utf-8")
     html = (WEB / "index.html").read_text(encoding="utf-8")
 
-    assert game_js.count("id: '") >= 10
+    assert game_js.count("id: '") == 10
     assert "pawn_forward_strike" in game_js
+    assert "type: '패시브'" in game_js
+    assert "type: '액티브'" in game_js
+    assert "randomCards()" in game_js
+    assert "selectedCardsFromUi" not in game_js
+    assert "supply_pawn" not in game_js
+    assert "supply_knight" not in game_js
+    assert "supply_bishop" not in game_js
+    assert "supply_rook" not in game_js
     assert "activateCard" in game_js
     assert "class AudioManager" in game_js
     assert "updateBgm(totalPoints)" in game_js
     assert "play(kind)" in game_js
-    assert 'id="whiteCard"' in html
-    assert 'id="blackCard"' in html
+    assert 'id="whiteCard"' not in html
+    assert 'id="blackCard"' not in html
+    assert "랜덤으로 지급" in html
     assert 'id="enableSound"' in html
