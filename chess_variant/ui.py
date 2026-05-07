@@ -104,7 +104,7 @@ class ChessVariantApp(tk.Tk):
 
         self._separator(side, 12)
         ttk.Label(side, text="부활", style="Panel.TLabel").grid(row=13, column=0, sticky="w", pady=(10, 4))
-        for idx, piece in enumerate(("P", "N", "Q", "R"), start=14):
+        for idx, piece in enumerate(("P", "N", "B", "R"), start=14):
             button = ttk.Button(side, text=self.revive_label(piece), command=lambda p=piece: self.on_revive(p), style="Revive.TButton")
             button.grid(row=idx, column=0, sticky="ew", pady=2)
             self.revive_buttons[piece] = button
@@ -112,7 +112,7 @@ class ChessVariantApp(tk.Tk):
             side,
             text=(
                 "부활 카운트: 총 5칸, 사용 시 붉은 원으로 표시\n"
-                "폰 1칸, 나이트 2칸, 퀸/룩 3칸\n"
+                "폰 1칸, 나이트 2칸, 비숍/룩 3칸\n"
                 "고급 규칙: 캐슬링, 앙파상, 50수/반복 무승부"
             ),
             wraplength=260,
@@ -123,7 +123,7 @@ class ChessVariantApp(tk.Tk):
         tk.Frame(parent, bg="#2F405D", height=1).grid(row=row, column=0, sticky="ew", pady=4)
 
     def revive_label(self, piece: str) -> str:
-        names = {"P": "폰", "N": "나이트", "Q": "퀸", "R": "룩"}
+        names = {"P": "폰", "N": "나이트", "B": "비숍", "R": "룩"}
         remaining = self.revive_remaining(self.game.turn, piece)
         return f"{names[piece]} 부활  ·  {REVIVE_COSTS[piece]}칸  ·  남은 {remaining}칸"
 

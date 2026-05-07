@@ -7,10 +7,22 @@
     wK: '♔', wQ: '♕', wR: '♖', wB: '♗', wN: '♘', wP: '♙',
     bK: '♚', bQ: '♛', bR: '♜', bB: '♝', bN: '♞', bP: '♟'
   };
-  const NAMES = { P: '폰', N: '나이트', Q: '퀸', R: '룩' };
+  const NAMES = { P: '폰', N: '나이트', B: '비숍', R: '룩' };
   const COSTS = DATA.reviveCosts;
   const REVIVE_COUNTER_LIMIT = DATA.reviveCounterLimit;
   const CAPTURE_POINTS = DATA.capturePoints;
+  const SKILL_CARDS = [
+    { id: 'pawn_forward_strike', name: '정면 돌파 폰', description: '폰이 단 한 번 정면의 상대 말을 잡을 수 있습니다.', passive: true },
+    { id: 'supply_pawn', name: '예비 폰', description: '부활 대기 목록에 폰 1개를 추가합니다.' },
+    { id: 'supply_knight', name: '기사의 귀환', description: '부활 대기 목록에 나이트 1개를 추가합니다.' },
+    { id: 'supply_bishop', name: '주교의 비밀 통로', description: '부활 대기 목록에 비숍 1개를 추가합니다.' },
+    { id: 'supply_rook', name: '성채 재건', description: '부활 대기 목록에 룩 1개를 추가합니다.' },
+    { id: 'meter_refund', name: '영혼 정화', description: '사용한 부활 카운터 1칸을 비웁니다.' },
+    { id: 'battle_focus', name: '전투 집중', description: '즉시 포인트 2점을 얻습니다.' },
+    { id: 'disrupt_enemy_meter', name: '봉인 의식', description: '상대의 부활 카운터 1칸을 붉게 채웁니다.' },
+    { id: 'point_siphon', name: '전세 흡수', description: '상대 포인트 1점을 빼앗아 옵니다.' },
+    { id: 'open_revive_lane', name: '부활로 개방', description: '킹 앞 부활 칸의 아군 말을 가까운 빈 칸으로 이동시킵니다.' }
+  ];
 
   const clone = (value) => JSON.parse(JSON.stringify(value));
   const opposite = (color) => color === 'w' ? 'b' : 'w';
@@ -20,12 +32,13 @@
   const homeRookSquare = (color, side) => [color === 'w' ? 7 : 0, side === 'K' ? 7 : 0];
 
   class Move {
-    constructor(start, end, { promotion = null, isCastling = false, isEnPassant = false } = {}) {
+    constructor(start, end, { promotion = null, isCastling = false, isEnPassant = false, skillCard = null } = {}) {
       this.start = start;
       this.end = end;
       this.promotion = promotion;
       this.isCastling = isCastling;
       this.isEnPassant = isEnPassant;
+      this.skillCard = skillCard;
     }
     uci() {
       return `${squareName(...this.start)}${squareName(...this.end)}${(this.promotion || '').toLowerCase()}`;
@@ -45,6 +58,8 @@
       this.points = { w: 0, b: 0 };
       this.captured = { w: [], b: [] };
       this.revivesUsed = { w: 0, b: 0 };
+      this.selectedCards = { w: 'pawn_forward_strike', b: 'supply_pawn' };
+      this.usedCards = { w: false, b: false };
       this.castlingRights = { w: { K: true, Q: true }, b: { K: true, Q: true } };
       this.enPassantTarget = null;
       this.halfmoveClock = 0;
@@ -61,6 +76,8 @@
       game.points = clone(this.points);
       game.captured = clone(this.captured);
       game.revivesUsed = clone(this.revivesUsed);
+      game.selectedCards = clone(this.selectedCards);
+      game.usedCards = clone(this.usedCards);
       game.castlingRights = clone(this.castlingRights);
       game.enPassantTarget = this.enPassantTarget ? [...this.enPassantTarget] : null;
       game.halfmoveClock = this.halfmoveClock;
@@ -91,7 +108,7 @@
       const square = this.reviveSquare(color);
       if (!square || this.board[square[0]][square[1]]) return [];
       const actions = [];
-      for (const piece of ['P', 'N', 'Q', 'R']) {
+      for (const piece of ['P', 'N', 'B', 'R']) {
         if (!this.canRevive(color, piece)) continue;
         const trial = this.copy();
         trial.applyReviveNoValidation(piece, color);
@@ -194,6 +211,7 @@
         this.board[sr][rookEnd] = this.board[sr][rookStart];
         this.board[sr][rookStart] = null;
       }
+      if (move.skillCard) this.consumeCard(piece[0]);
       this.updateCastlingRights(piece, move.start, capturedPiece, capturedSquare);
       this.enPassantTarget = null;
       if (piece[1] === 'P' && Math.abs(er - sr) === 2) this.enPassantTarget = [(sr + er) / 2, sc];
@@ -257,6 +275,9 @@
           if (this.enPassantTarget?.[0] === nr && this.enPassantTarget?.[1] === nc && this.board[r][nc] === `${enemy}P`) {
             moves.push(new Move([r, c], [nr, nc], { isEnPassant: true }));
           }
+        }
+        if (this.hasUnusedCard(color, 'pawn_forward_strike') && inBounds(nr, c) && this.board[nr][c]?.[0] === enemy && this.board[nr][c][1] !== 'K') {
+          moves.push(new Move([r, c], [nr, c], { promotion: (nr === 0 || nr === 7) ? 'Q' : null, skillCard: 'pawn_forward_strike' }));
         }
       } else if (kind === 'N') {
         for (const [dr, dc] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]) this.addIfValid(moves, color, r, c, r + dr, c + dc);
@@ -330,6 +351,83 @@
         for (const dr of [-1, 0, 1]) for (const dc of [-1, 0, 1]) if ((dr || dc) && inBounds(r + dr, c + dc)) attacks.push([r + dr, c + dc]);
       }
       return attacks;
+    }
+
+    hasUnusedCard(color, id = null) {
+      return !this.usedCards[color] && (!id || this.selectedCards[color] === id);
+    }
+
+    consumeCard(color) {
+      this.usedCards[color] = true;
+    }
+
+    selectedCard(color) {
+      return SKILL_CARDS.find((card) => card.id === this.selectedCards[color]);
+    }
+
+    activateCard(color) {
+      const card = this.selectedCard(color);
+      if (!card || this.usedCards[color]) return { ok: false, message: '이미 사용한 기술 카드입니다.' };
+      if (card.passive) return { ok: false, message: '이 카드는 조건이 맞는 이동을 할 때 자동 발동됩니다.' };
+      const enemy = opposite(color);
+      switch (card.id) {
+        case 'supply_pawn':
+          this.captured[color].push('P');
+          break;
+        case 'supply_knight':
+          this.captured[color].push('N');
+          break;
+        case 'supply_bishop':
+          this.captured[color].push('B');
+          break;
+        case 'supply_rook':
+          this.captured[color].push('R');
+          break;
+        case 'meter_refund':
+          if (this.revivesUsed[color] <= 0) return { ok: false, message: '비울 부활 카운터가 없습니다.' };
+          this.revivesUsed[color] = Math.max(0, this.revivesUsed[color] - 1);
+          break;
+        case 'battle_focus':
+          this.points[color] += 2;
+          break;
+        case 'disrupt_enemy_meter':
+          if (this.revivesUsed[enemy] >= REVIVE_COUNTER_LIMIT) return { ok: false, message: '상대 부활 카운터가 이미 가득 찼습니다.' };
+          this.revivesUsed[enemy] = Math.min(REVIVE_COUNTER_LIMIT, this.revivesUsed[enemy] + 1);
+          break;
+        case 'point_siphon':
+          if (this.points[enemy] <= 0) return { ok: false, message: '빼앗을 상대 포인트가 없습니다.' };
+          this.points[enemy] -= 1;
+          this.points[color] += 1;
+          break;
+        case 'open_revive_lane': {
+          const square = this.reviveSquare(color);
+          if (!square) return { ok: false, message: '부활 칸이 없습니다.' };
+          const [r, c] = square;
+          const blocker = this.board[r][c];
+          if (!blocker || blocker[0] !== color || blocker[1] === 'K') return { ok: false, message: '이동시킬 아군 말이 부활 칸에 없습니다.' };
+          const target = this.nearestEmptySquare(r, c);
+          if (!target) return { ok: false, message: '이동 가능한 빈 칸이 없습니다.' };
+          this.board[target[0]][target[1]] = blocker;
+          this.board[r][c] = null;
+          break;
+        }
+        default:
+          return { ok: false, message: '아직 구현되지 않은 카드입니다.' };
+      }
+      this.consumeCard(color);
+      this.moveLog.push(`${color} card:${card.name}`);
+      return { ok: true, message: `${card.name} 발동!` };
+    }
+
+    nearestEmptySquare(row, col) {
+      for (let radius = 1; radius < 8; radius += 1) {
+        for (let r = row - radius; r <= row + radius; r += 1) {
+          for (let c = col - radius; c <= col + radius; c += 1) {
+            if (inBounds(r, c) && !this.board[r][c] && !(r === row && c === col)) return [r, c];
+          }
+        }
+      }
+      return null;
     }
   }
 
@@ -430,33 +528,121 @@
     }
   }
 
+
+  class AudioManager {
+    constructor() {
+      this.context = null;
+      this.bgmTimer = null;
+      this.bgmStep = 0;
+      this.lastIntensity = -1;
+    }
+    ensure() {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return null;
+      if (!this.context) this.context = new AudioContext();
+      if (this.context.state === 'suspended') this.context.resume();
+      return this.context;
+    }
+    tone(frequency, duration = 0.12, type = 'sine', gain = 0.08) {
+      const ctx = this.ensure();
+      if (!ctx) return;
+      const osc = ctx.createOscillator();
+      const amp = ctx.createGain();
+      osc.type = type;
+      osc.frequency.value = frequency;
+      amp.gain.setValueAtTime(0.0001, ctx.currentTime);
+      amp.gain.exponentialRampToValueAtTime(gain, ctx.currentTime + 0.015);
+      amp.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
+      osc.connect(amp).connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + duration + 0.02);
+    }
+    play(kind) {
+      const patterns = {
+        move: [[440, 0], [660, 0.06]],
+        capture: [[220, 0], [165, 0.05], [330, 0.1]],
+        revive: [[392, 0], [523, 0.08], [784, 0.16]],
+        card: [[659, 0], [880, 0.07], [1175, 0.14]]
+      };
+      for (const [freq, delay] of patterns[kind] || patterns.move) {
+        window.setTimeout(() => this.tone(freq, 0.14, kind === 'capture' ? 'square' : 'triangle', 0.07), delay * 1000);
+      }
+    }
+    updateBgm(totalPoints) {
+      if (!this.context) return;
+      const ctx = this.ensure();
+      if (!ctx) return;
+      const intensity = Math.min(3, Math.floor(totalPoints / 4));
+      if (this.bgmTimer && intensity === this.lastIntensity) return;
+      if (this.bgmTimer) window.clearInterval(this.bgmTimer);
+      this.lastIntensity = intensity;
+      const tempos = [1500, 1150, 850, 620];
+      const progressions = [
+        [261.63, 329.63, 392.0, 523.25],
+        [293.66, 369.99, 440.0, 587.33],
+        [329.63, 415.3, 493.88, 659.25],
+        [392.0, 493.88, 587.33, 783.99]
+      ];
+      this.bgmTimer = window.setInterval(() => {
+        const notes = progressions[intensity];
+        const note = notes[this.bgmStep % notes.length];
+        this.bgmStep += 1;
+        this.tone(note, 0.45, 'sine', 0.025 + intensity * 0.01);
+        if (intensity >= 2) this.tone(note * 2, 0.18, 'triangle', 0.012);
+      }, tempos[intensity]);
+    }
+  }
+
   class ReviveChessUi {
     constructor() {
       this.game = new ChessGame();
       this.selected = null;
       this.legalTargets = new Map();
       this.computer = new ComputerPlayer('b', this.difficultyValue());
+      this.audio = new AudioManager();
       this.boardEl = document.querySelector('#board');
       this.statusEl = document.querySelector('#statusText');
       this.capturedEl = document.querySelector('#capturedText');
       this.turnBadge = document.querySelector('#turnBadge');
+      this.cardTextEl = document.querySelector('#cardText');
+      this.activateCardButton = document.querySelector('#activateCard');
       this.reviveMeterEl = document.querySelector('#reviveMeter');
       this.reviveButtons = new Map([...document.querySelectorAll('[data-revive]')].map((button) => [button.dataset.revive, button]));
       this.bindEvents();
+      this.game.selectedCards = this.selectedCardsFromUi();
       this.render();
     }
     bindEvents() {
+      this.populateCardSelects();
       document.querySelector('#newGame').addEventListener('click', () => this.newGame());
+      document.querySelector('#enableSound').addEventListener('click', () => { this.audio.ensure(); this.audio.updateBgm(this.totalPoints()); });
+      this.activateCardButton.addEventListener('click', () => this.onActivateCard());
       document.querySelector('#difficulty').addEventListener('change', () => this.newGame());
       document.querySelectorAll('input[name="opponent"]').forEach((input) => input.addEventListener('change', () => this.newGame()));
       document.querySelectorAll('[data-revive]').forEach((button) => button.addEventListener('click', () => this.onRevive(button.dataset.revive)));
     }
+    populateCardSelects() {
+      for (const select of [document.querySelector('#whiteCard'), document.querySelector('#blackCard')]) {
+        select.innerHTML = '';
+        for (const card of SKILL_CARDS) {
+          const option = document.createElement('option');
+          option.value = card.id;
+          option.textContent = `${card.name} — ${card.description}`;
+          select.append(option);
+        }
+      }
+      document.querySelector('#blackCard').value = 'supply_pawn';
+    }
     opponentValue() { return document.querySelector('input[name="opponent"]:checked').value; }
     difficultyValue() { return document.querySelector('#difficulty').value; }
+    selectedCardsFromUi() { return { w: document.querySelector('#whiteCard').value, b: document.querySelector('#blackCard').value }; }
+    totalPoints() { return this.game.points.w + this.game.points.b; }
     newGame() {
       this.game = new ChessGame();
       this.selected = null;
       this.legalTargets = new Map();
+      this.game.selectedCards = this.selectedCardsFromUi();
+      this.game.usedCards = { w: false, b: false };
       this.computer = this.opponentValue() === 'COMPUTER' ? new ComputerPlayer('b', this.difficultyValue()) : null;
       this.render();
     }
@@ -464,7 +650,11 @@
       if (this.isComputerTurn()) return;
       const key = `${row},${col}`;
       if (this.legalTargets.has(key)) {
-        this.game.makeMove(this.legalTargets.get(key));
+        this.audio.ensure();
+        const move = this.legalTargets.get(key);
+        const wasCapture = Boolean(this.game.board[row][col]) || move.isEnPassant;
+        this.game.makeMove(move);
+        this.audio.play(move.skillCard ? 'card' : wasCapture ? 'capture' : 'move');
         this.selected = null;
         this.legalTargets.clear();
         this.afterPlayerAction();
@@ -483,13 +673,27 @@
     onRevive(piece) {
       if (this.isComputerTurn()) return;
       try {
+        this.audio.ensure();
         this.game.revive(piece);
+        this.audio.play('revive');
         this.selected = null;
         this.legalTargets.clear();
         this.afterPlayerAction();
       } catch (_error) {
-        alert('점수, 잡힌 말, 횟수, 위치 또는 체크 상태 때문에 부활할 수 없습니다.');
+        alert('잡힌 말, 남은 카운트, 위치 또는 체크 상태 때문에 부활할 수 없습니다.');
       }
+    }
+    onActivateCard() {
+      if (this.isComputerTurn()) return;
+      this.audio.ensure();
+      const result = this.game.activateCard(this.game.turn);
+      if (!result.ok) {
+        alert(result.message);
+        return;
+      }
+      this.audio.play('card');
+      this.render();
+      this.maybeFinish();
     }
     afterPlayerAction() {
       this.render();
@@ -498,9 +702,22 @@
     }
     computerTurn() {
       if (!this.isComputerTurn()) return;
+      const card = this.game.selectedCard(this.game.turn);
+      if (card && !card.passive && !this.game.usedCards[this.game.turn]) {
+        const cardResult = this.game.activateCard(this.game.turn);
+        if (cardResult.ok) this.audio.play('card');
+      }
       const action = this.computer.chooseAction(this.game);
-      if (action.kind === 'move') this.game.makeMove(action.move);
-      if (action.kind === 'revive') this.game.revive(action.revive.piece);
+      if (action.kind === 'move') {
+        const [er, ec] = action.move.end;
+        const wasCapture = Boolean(this.game.board[er][ec]) || action.move.isEnPassant;
+        this.game.makeMove(action.move);
+        this.audio.play(action.move.skillCard ? 'card' : wasCapture ? 'capture' : 'move');
+      }
+      if (action.kind === 'revive') {
+        this.game.revive(action.revive.piece);
+        this.audio.play('revive');
+      }
       this.render();
       this.maybeFinish();
     }
@@ -516,9 +733,22 @@
       document.querySelector('#whiteScore').textContent = this.game.points.w;
       document.querySelector('#blackScore').textContent = this.game.points.b;
       this.statusEl.textContent = `Turn: ${turn}\nStatus: ${this.game.status()}\nCOMPUTER difficulty: ${this.computer ? this.difficultyValue() : '-'}\nRevive square: ${this.describeReviveSquare()}\nHalfmove clock: ${this.game.halfmoveClock}`;
+      this.cardTextEl.textContent = this.cardStatusText();
+      this.activateCardButton.disabled = this.isComputerTurn() || this.game.usedCards[this.game.turn] || this.game.selectedCard(this.game.turn)?.passive;
+      this.audio.updateBgm(this.totalPoints());
       this.capturedEl.textContent = `Captured allies available for revive\nWhite: ${JSON.stringify(this.game.captured.w)}\nBlack: ${JSON.stringify(this.game.captured.b)}\nRevive counters W: ${this.reviveCounterText('w')}\nRevive counters B: ${this.reviveCounterText('b')}`;
       this.updateReviveButtons();
       this.renderReviveMeter();
+    }
+    cardStatusText() {
+      const line = (color, label) => {
+        const card = this.game.selectedCard(color);
+        return `${label}: ${card?.name || '-'} · ${this.game.usedCards[color] ? '사용 완료' : card?.passive ? '자동 발동 대기' : '사용 가능'}
+${card?.description || ''}`;
+      };
+      return `${line('w', 'White')}
+
+${line('b', 'Black')}`;
     }
     reviveRemaining(color) {
       return Math.max(0, REVIVE_COUNTER_LIMIT - this.game.revivesUsed[color]);
@@ -583,6 +813,6 @@
     }
   }
 
-  window.ReviveChess = { ChessGame, ComputerPlayer, Move };
+  window.ReviveChess = { ChessGame, ComputerPlayer, Move, SKILL_CARDS };
   window.addEventListener('DOMContentLoaded', () => new ReviveChessUi());
 })();

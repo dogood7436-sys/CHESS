@@ -39,8 +39,15 @@
         <option selected>중급자</option>
         <option>상급자</option>
       </select>
+      <label class="field-label" for="whiteCard">White 기술 카드</label>
+      <select id="whiteCard"></select>
+      <label class="field-label" for="blackCard">Black 기술 카드</label>
+      <select id="blackCard"></select>
       <button id="newGame" class="primary">새 게임</button>
+      <button id="enableSound" class="secondary">사운드 켜기</button>
+      <button id="activateCard" class="card-action">기술 카드 발동</button>
 
+      <div class="stat-card" id="cardText"></div>
       <div class="stat-card" id="statusText"></div>
       <div class="meter-card"><span>부활 카운트</span><div id="reviveMeter" class="revive-meter" aria-label="Revive counter meter"></div></div>
       <div class="score-grid">
@@ -52,7 +59,7 @@
       <div class="revive-buttons">
         <button data-revive="P">폰 · 1칸 · 남은 5칸</button>
         <button data-revive="N">나이트 · 2칸 · 남은 5칸</button>
-        <button data-revive="Q">퀸 · 3칸 · 남은 5칸</button>
+        <button data-revive="B">비숍 · 3칸 · 남은 5칸</button>
         <button data-revive="R">룩 · 3칸 · 남은 5칸</button>
       </div>
 

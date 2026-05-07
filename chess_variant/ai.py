@@ -155,7 +155,7 @@ class ComputerPlayer:
         return table[index]
 
     def revive_bonus(self, piece: str) -> int:
-        return {"P": 60, "N": 130, "Q": 220, "R": 170}.get(piece, 0)
+        return {"P": 60, "N": 130, "B": 150, "R": 170}.get(piece, 0)
 
 
 def ai_data_path() -> Path:

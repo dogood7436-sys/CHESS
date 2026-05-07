@@ -8,7 +8,7 @@ FILES = "abcdefgh"
 PROMOTION_PIECE = "Q"
 CAPTURE_POINTS = {"P": 1, "N": 3, "B": 5, "R": 5, "Q": 0, "K": 0}
 REVIVE_COUNTER_LIMIT = 5
-REVIVE_COSTS = {"P": 1, "N": 2, "Q": 3, "R": 3}
+REVIVE_COSTS = {"P": 1, "N": 2, "B": 3, "R": 3}
 UNICODE_PIECES = {
     "wK": "♔", "wQ": "♕", "wR": "♖", "wB": "♗", "wN": "♘", "wP": "♙",
     "bK": "♚", "bQ": "♛", "bR": "♜", "bB": "♝", "bN": "♞", "bP": "♟",
@@ -81,7 +81,7 @@ class ChessGame:
         if square is None or self.board[square[0]][square[1]] is not None:
             return []
         actions: list[ReviveAction] = []
-        for piece in ("P", "N", "Q", "R"):
+        for piece in ("P", "N", "B", "R"):
             if self.can_revive(color, piece):
                 trial = self.clone()
                 trial._apply_revive_no_validation(piece, color)

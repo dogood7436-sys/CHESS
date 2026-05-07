@@ -33,8 +33,8 @@ def test_pawn_revives_in_front_of_own_king_and_consumes_one_count() -> None:
 def test_shared_five_count_revive_meter_blocks_overflow() -> None:
     game = ChessGame()
     game.board[6][4] = None
-    game.captured["w"] = ["Q", "N", "P"]
-    game.revive("Q")
+    game.captured["w"] = ["B", "N", "P"]
+    game.revive("B")
     game.turn = "w"
     game.board[6][4] = None
     game.revive("N")
@@ -45,16 +45,16 @@ def test_shared_five_count_revive_meter_blocks_overflow() -> None:
     assert not game.can_revive("w", "P")
 
 
-def test_rook_uses_three_count_and_bishop_cannot_be_revived() -> None:
+def test_rook_uses_three_count_and_queen_cannot_be_revived() -> None:
     game = ChessGame()
     game.board[6][4] = None
-    game.captured["w"] = ["R", "B"]
+    game.captured["w"] = ["R", "Q"]
 
     game.revive("R")
 
     assert game.revives_used["w"] == 3
-    assert not game.can_revive("w", "B")
-    assert all(action.piece != "B" for action in game.legal_revives("w"))
+    assert not game.can_revive("w", "Q")
+    assert all(action.piece != "Q" for action in game.legal_revives("w"))
 
 
 def test_computer_selects_local_action() -> None:

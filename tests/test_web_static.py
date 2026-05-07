@@ -56,7 +56,22 @@ def test_web_uses_shared_five_count_revive_system() -> None:
     html = (WEB / "index.html").read_text(encoding="utf-8")
 
     assert "reviveCounterLimit: 5" in data
-    assert "reviveCosts: { P: 1, N: 2, Q: 3, R: 3 }" in data
+    assert "reviveCosts: { P: 1, N: 2, B: 3, R: 3 }" in data
     assert "reviveLimits" not in data
-    assert 'data-revive="Q"' in html
-    assert 'data-revive="B"' not in html
+    assert 'data-revive="B"' in html
+    assert 'data-revive="Q"' not in html
+
+
+def test_web_has_ten_skill_cards_and_audio_system() -> None:
+    game_js = (WEB / "game.js").read_text(encoding="utf-8")
+    html = (WEB / "index.html").read_text(encoding="utf-8")
+
+    assert game_js.count("id: '") >= 10
+    assert "pawn_forward_strike" in game_js
+    assert "activateCard" in game_js
+    assert "class AudioManager" in game_js
+    assert "updateBgm(totalPoints)" in game_js
+    assert "play(kind)" in game_js
+    assert 'id="whiteCard"' in html
+    assert 'id="blackCard"' in html
+    assert 'id="enableSound"' in html
