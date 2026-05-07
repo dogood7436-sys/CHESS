@@ -212,7 +212,7 @@ class ChessVariantApp(tk.Tk):
             f"COMPUTER difficulty: {difficulty}\nRevive square: {self.describe_revive_square()}\n"
             f"Halfmove clock: {self.game.halfmove_clock}"
         )
-        self.points_var.set(f"Points   White {self.game.points['w']}  ·  Black {self.game.points['b']}")
+        self.points_var.set(f"Kill Points   White {self.game.points['w']}  ·  Black {self.game.points['b']}")
         self.captured_var.set(
             "Captured allies available for revive\n"
             f"White: {self.game.captured['w']}\nBlack: {self.game.captured['b']}\n"

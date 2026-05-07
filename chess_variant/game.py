@@ -6,7 +6,7 @@ from typing import Iterable
 
 FILES = "abcdefgh"
 PROMOTION_PIECE = "Q"
-CAPTURE_POINTS = {"P": 1, "N": 3, "B": 5, "R": 5, "Q": 0, "K": 0}
+CAPTURE_POINTS = {"P": 1, "N": 3, "B": 5, "R": 5, "Q": 20, "K": 0}
 REVIVE_COUNTER_LIMIT = 5
 REVIVE_COSTS = {"P": 1, "N": 2, "B": 3, "R": 3}
 UNICODE_PIECES = {

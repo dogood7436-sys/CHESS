@@ -1,7 +1,7 @@
 window.REVIVE_CHESS_AI_DATA = {
   description: "Local browser data for the Revive Chess COMPUTER opponent. No network request is required.",
   material: { P: 100, N: 320, B: 330, R: 500, Q: 900, K: 20000 },
-  capturePoints: { P: 1, N: 3, B: 5, R: 5, Q: 0, K: 0 },
+  capturePoints: { P: 1, N: 3, B: 5, R: 5, Q: 20, K: 0 },
   reviveCounterLimit: 5,
   reviveCosts: { P: 1, N: 2, B: 3, R: 3 },
   openingMoves: ["e2e4", "d2d4", "g1f3", "c2c4", "e7e5", "d7d5", "g8f6", "c7c5"],

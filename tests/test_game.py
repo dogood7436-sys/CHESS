@@ -16,6 +16,21 @@ def test_capture_awards_points_and_records_captured_piece() -> None:
     assert game.captured["b"] == ["P"]
 
 
+
+def test_queen_capture_awards_twenty_kill_points() -> None:
+    game = ChessGame()
+    game.board = [[None] * 8 for _ in range(8)]
+    game.board[7][4] = "wK"
+    game.board[0][4] = "bK"
+    game.board[4][4] = "wR"
+    game.board[4][0] = "bQ"
+    game.position_counts = {game.position_key(): 1}
+
+    game.make_move(move("e4", "a4"))
+
+    assert game.points["w"] == 20
+    assert game.captured["b"] == ["Q"]
+
 def test_pawn_revives_in_front_of_own_king_and_consumes_one_count() -> None:
     game = ChessGame()
     game.board[6][4] = None
