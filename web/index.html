@@ -42,6 +42,7 @@
       <button id="newGame" class="primary">새 게임</button>
 
       <div class="stat-card" id="statusText"></div>
+      <div class="meter-card"><span>부활 카운트</span><div id="reviveMeter" class="revive-meter" aria-label="Revive counter meter"></div></div>
       <div class="score-grid">
         <div><span>White</span><strong id="whiteScore">0</strong></div>
         <div><span>Black</span><strong id="blackScore">0</strong></div>
@@ -49,10 +50,10 @@
 
       <h3>부활</h3>
       <div class="revive-buttons">
-        <button data-revive="P">폰 · 2점 · 남은 2회</button>
-        <button data-revive="N">나이트 · 6점 · 남은 1회</button>
-        <button data-revive="B">비숍 · 10점 · 남은 1회</button>
-        <button data-revive="R">룩 · 10점 · 남은 1회</button>
+        <button data-revive="P">폰 · 1칸 · 남은 5칸</button>
+        <button data-revive="N">나이트 · 2칸 · 남은 5칸</button>
+        <button data-revive="Q">퀸 · 3칸 · 남은 5칸</button>
+        <button data-revive="R">룩 · 3칸 · 남은 5칸</button>
       </div>
 
       <div class="stat-card small" id="capturedText"></div>

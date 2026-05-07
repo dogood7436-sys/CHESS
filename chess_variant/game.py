@@ -7,7 +7,8 @@ from typing import Iterable
 FILES = "abcdefgh"
 PROMOTION_PIECE = "Q"
 CAPTURE_POINTS = {"P": 1, "N": 3, "B": 5, "R": 5, "Q": 0, "K": 0}
-REVIVE_COSTS = {"P": 2, "N": 6, "B": 10, "R": 10}
+REVIVE_COUNTER_LIMIT = 5
+REVIVE_COSTS = {"P": 1, "N": 2, "Q": 3, "R": 3}
 UNICODE_PIECES = {
     "wK": "♔", "wQ": "♕", "wR": "♖", "wB": "♗", "wN": "♘", "wP": "♙",
     "bK": "♚", "bQ": "♛", "bR": "♜", "bB": "♝", "bN": "♞", "bP": "♟",
@@ -39,9 +40,7 @@ class ChessGame:
     turn: str = "w"
     points: dict[str, int] = field(default_factory=lambda: {"w": 0, "b": 0})
     captured: dict[str, list[str]] = field(default_factory=lambda: {"w": [], "b": []})
-    revives_used: dict[str, dict[str, int]] = field(
-        default_factory=lambda: {"w": {"P": 0, "N": 0, "BR": 0}, "b": {"P": 0, "N": 0, "BR": 0}}
-    )
+    revives_used: dict[str, int] = field(default_factory=lambda: {"w": 0, "b": 0})
     castling_rights: dict[str, dict[str, bool]] = field(
         default_factory=lambda: {"w": {"K": True, "Q": True}, "b": {"K": True, "Q": True}}
     )
@@ -82,7 +81,7 @@ class ChessGame:
         if square is None or self.board[square[0]][square[1]] is not None:
             return []
         actions: list[ReviveAction] = []
-        for piece in ("P", "N", "B", "R"):
+        for piece in ("P", "N", "Q", "R"):
             if self.can_revive(color, piece):
                 trial = self.clone()
                 trial._apply_revive_no_validation(piece, color)
@@ -93,15 +92,7 @@ class ChessGame:
     def can_revive(self, color: str, piece: str) -> bool:
         if piece not in REVIVE_COSTS or piece not in self.captured[color]:
             return False
-        if self.points[color] < REVIVE_COSTS[piece]:
-            return False
-        if piece == "P":
-            return self.revives_used[color]["P"] < 2
-        if piece == "N":
-            return self.revives_used[color]["N"] < 1
-        if piece in {"B", "R"}:
-            return self.revives_used[color]["BR"] < 1
-        return False
+        return self.revives_used[color] + REVIVE_COSTS[piece] <= REVIVE_COUNTER_LIMIT
 
     def make_move(self, move: Move) -> None:
         legal = {candidate.uci(): candidate for candidate in self.legal_moves(self.turn)}
@@ -264,14 +255,8 @@ class ChessGame:
             raise ValueError("No revive square")
         r, c = square
         self.board[r][c] = color + piece
-        self.points[color] -= REVIVE_COSTS[piece]
         self.captured[color].remove(piece)
-        if piece == "P":
-            self.revives_used[color]["P"] += 1
-        elif piece == "N":
-            self.revives_used[color]["N"] += 1
-        else:
-            self.revives_used[color]["BR"] += 1
+        self.revives_used[color] += REVIVE_COSTS[piece]
         self.en_passant_target = None
         self.halfmove_clock += 1
         self.move_log.append(f"{color}{piece} revived@{square_name(r, c)}")

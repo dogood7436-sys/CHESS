@@ -16,39 +16,45 @@ def test_capture_awards_points_and_records_captured_piece() -> None:
     assert game.captured["b"] == ["P"]
 
 
-def test_pawn_revives_in_front_of_own_king_and_consumes_limits() -> None:
+def test_pawn_revives_in_front_of_own_king_and_consumes_one_count() -> None:
     game = ChessGame()
     game.board[6][4] = None
-    game.points["w"] = 4
-    game.captured["w"] = ["P", "P"]
+    game.captured["w"] = ["P"]
 
     action = game.revive("P")
 
     assert action.square == parse_square("e2")
     assert game.board[action.square[0]][action.square[1]] == "wP"
-    assert game.points["w"] == 2
-    assert game.revives_used["w"]["P"] == 1
+    assert game.points["w"] == 0
+    assert game.revives_used["w"] == 1
     assert game.turn == "b"
 
 
-def test_bishop_and_rook_share_one_revive_limit() -> None:
+def test_shared_five_count_revive_meter_blocks_overflow() -> None:
     game = ChessGame()
     game.board[6][4] = None
-    game.points["w"] = 20
-    game.captured["w"] = ["B", "R"]
-    game.revive("B")
+    game.captured["w"] = ["Q", "N", "P"]
+    game.revive("Q")
+    game.turn = "w"
+    game.board[6][4] = None
+    game.revive("N")
     game.turn = "w"
     game.board[6][4] = None
 
-    assert not game.can_revive("w", "R")
+    assert game.revives_used["w"] == 5
+    assert not game.can_revive("w", "P")
 
 
-def test_queen_cannot_be_revived() -> None:
+def test_rook_uses_three_count_and_bishop_cannot_be_revived() -> None:
     game = ChessGame()
-    game.points["w"] = 99
-    game.captured["w"] = ["Q"]
+    game.board[6][4] = None
+    game.captured["w"] = ["R", "B"]
 
-    assert all(action.piece != "Q" for action in game.legal_revives("w"))
+    game.revive("R")
+
+    assert game.revives_used["w"] == 3
+    assert not game.can_revive("w", "B")
+    assert all(action.piece != "B" for action in game.legal_revives("w"))
 
 
 def test_computer_selects_local_action() -> None:
@@ -65,7 +71,6 @@ def test_revive_is_not_allowed_while_in_check() -> None:
     game.board[7][4] = "wK"
     game.board[0][0] = "bK"
     game.board[0][4] = "bR"
-    game.points["w"] = 10
     game.captured["w"] = ["P"]
     game.position_counts = {game.position_key(): 1}
 

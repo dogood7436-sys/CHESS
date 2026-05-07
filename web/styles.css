@@ -187,6 +187,11 @@ button:disabled { cursor: not-allowed; filter: saturate(.65); opacity: .72; }
   line-height: 1.55;
 }
 .stat-card.small { color: var(--muted); font-size: 13px; }
+.meter-card { margin-top: 12px; padding: 14px; border-radius: 18px; background: rgba(255,255,255,.06); }
+.meter-card span { display:block; color: var(--muted); font-size: 12px; font-weight: 900; margin-bottom: 10px; }
+.revive-meter { display:flex; gap: 9px; }
+.meter-circle { width: 20px; height: 20px; border-radius: 50%; border: 2px solid rgba(255,255,255,.55); background: transparent; box-shadow: inset 0 0 0 2px rgba(0,0,0,.18); }
+.meter-circle.used { border-color: #ff8a8a; background: #d92d3a; box-shadow: 0 0 14px rgba(217,45,58,.45); }
 .score-grid { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
 .score-grid div { padding: 14px; border-radius: 16px; background: rgba(103,183,255,.1); }
 .score-grid span { display:block; color: var(--muted); font-size: 12px; font-weight: 900; }

@@ -11,7 +11,7 @@ def empty_game() -> ChessGame:
     game.board = [[None] * 8 for _ in range(8)]
     game.points = {"w": 0, "b": 0}
     game.captured = {"w": [], "b": []}
-    game.revives_used = {"w": {"P": 0, "N": 0, "BR": 0}, "b": {"P": 0, "N": 0, "BR": 0}}
+    game.revives_used = {"w": 0, "b": 0}
     game.position_counts = {game.position_key(): 1}
     return game
 

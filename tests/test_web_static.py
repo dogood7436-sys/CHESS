@@ -43,6 +43,20 @@ def test_web_revive_ui_has_counters_and_check_lockout() -> None:
 
     assert "if (this.inCheck(color)) return []" in game_js
     assert "updateReviveButtons" in game_js
+    assert "renderReviveMeter" in game_js
+    assert "REVIVE_COUNTER_LIMIT" in game_js
     assert "남은 ${remaining}" in game_js
     assert "button.disabled = exhausted || inCheck" in game_js
     assert ".revive-buttons button.spent" in css
+    assert ".meter-circle.used" in css
+
+
+def test_web_uses_shared_five_count_revive_system() -> None:
+    data = (WEB / "ai-data.js").read_text(encoding="utf-8")
+    html = (WEB / "index.html").read_text(encoding="utf-8")
+
+    assert "reviveCounterLimit: 5" in data
+    assert "reviveCosts: { P: 1, N: 2, Q: 3, R: 3 }" in data
+    assert "reviveLimits" not in data
+    assert 'data-revive="Q"' in html
+    assert 'data-revive="B"' not in html

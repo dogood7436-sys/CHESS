@@ -4,7 +4,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 from .ai import ComputerPlayer, DIFFICULTIES
-from .game import ChessGame, Move, REVIVE_COSTS, UNICODE_PIECES, square_name
+from .game import ChessGame, Move, REVIVE_COUNTER_LIMIT, REVIVE_COSTS, UNICODE_PIECES, square_name
 
 BOARD_SIZE = 640
 SQUARE_SIZE = BOARD_SIZE // 8
@@ -104,15 +104,15 @@ class ChessVariantApp(tk.Tk):
 
         self._separator(side, 12)
         ttk.Label(side, text="부활", style="Panel.TLabel").grid(row=13, column=0, sticky="w", pady=(10, 4))
-        for idx, piece in enumerate(("P", "N", "B", "R"), start=14):
+        for idx, piece in enumerate(("P", "N", "Q", "R"), start=14):
             button = ttk.Button(side, text=self.revive_label(piece), command=lambda p=piece: self.on_revive(p), style="Revive.TButton")
             button.grid(row=idx, column=0, sticky="ew", pady=2)
             self.revive_buttons[piece] = button
         ttk.Label(
             side,
             text=(
-                "잡은 말 점수: 폰 1, 나이트 3, 비숍/룩 5\n"
-                "부활 비용: 폰 2, 나이트 6, 비숍/룩 10\n"
+                "부활 카운트: 총 5칸, 사용 시 붉은 원으로 표시\n"
+                "폰 1칸, 나이트 2칸, 퀸/룩 3칸\n"
                 "고급 규칙: 캐슬링, 앙파상, 50수/반복 무승부"
             ),
             wraplength=260,
@@ -123,16 +123,16 @@ class ChessVariantApp(tk.Tk):
         tk.Frame(parent, bg="#2F405D", height=1).grid(row=row, column=0, sticky="ew", pady=4)
 
     def revive_label(self, piece: str) -> str:
-        names = {"P": "폰", "N": "나이트", "B": "비숍", "R": "룩"}
+        names = {"P": "폰", "N": "나이트", "Q": "퀸", "R": "룩"}
         remaining = self.revive_remaining(self.game.turn, piece)
-        return f"{names[piece]} 부활  ·  {REVIVE_COSTS[piece]}점  ·  남은 {remaining}회"
+        return f"{names[piece]} 부활  ·  {REVIVE_COSTS[piece]}칸  ·  남은 {remaining}칸"
 
-    def revive_remaining(self, color: str, piece: str) -> int:
-        if piece == "P":
-            return max(0, 2 - self.game.revives_used[color]["P"])
-        if piece == "N":
-            return max(0, 1 - self.game.revives_used[color]["N"])
-        return max(0, 1 - self.game.revives_used[color]["BR"])
+    def revive_remaining(self, color: str, piece: str | None = None) -> int:
+        return max(0, REVIVE_COUNTER_LIMIT - self.game.revives_used[color])
+
+    def revive_meter_text(self, color: str) -> str:
+        used = self.game.revives_used[color]
+        return "".join("🔴" if index < used else "⚪" for index in range(REVIVE_COUNTER_LIMIT))
 
     def new_game(self) -> None:
         self.game = ChessGame()
@@ -172,7 +172,7 @@ class ChessVariantApp(tk.Tk):
         try:
             self.game.revive(piece)
         except ValueError:
-            messagebox.showinfo("부활 불가", "점수, 잡힌 말, 횟수, 위치 또는 체크 상태 때문에 부활할 수 없습니다.")
+            messagebox.showinfo("부활 불가", "잡힌 말, 남은 카운트, 위치 또는 체크 상태 때문에 부활할 수 없습니다.")
             return
         self.selected = None
         self.legal_targets = {}
@@ -216,21 +216,19 @@ class ChessVariantApp(tk.Tk):
         self.captured_var.set(
             "Captured allies available for revive\n"
             f"White: {self.game.captured['w']}\nBlack: {self.game.captured['b']}\n"
-            f"Revive counters W: {self.revive_counter_text('w')}\nRevive counters B: {self.revive_counter_text('b')}"
+            f"Revive meter W: {self.revive_meter_text('w')} ({self.game.revives_used['w']}/5)\n"
+            f"Revive meter B: {self.revive_meter_text('b')} ({self.game.revives_used['b']}/5)"
         )
         self.update_revive_buttons()
-
-    def revive_counter_text(self, color: str) -> str:
-        return f"P {self.revive_remaining(color, 'P')}/2, N {self.revive_remaining(color, 'N')}/1, B/R {self.revive_remaining(color, 'B')}/1"
 
     def update_revive_buttons(self) -> None:
         legal_pieces = {action.piece for action in self.game.legal_revives(self.game.turn)}
         in_check = self.game.in_check(self.game.turn)
         for piece, button in self.revive_buttons.items():
-            exhausted = self.revive_remaining(self.game.turn, piece) == 0
+            unavailable_by_counter = self.revive_remaining(self.game.turn) < REVIVE_COSTS[piece]
             button.configure(text=self.revive_label(piece))
-            button.configure(style="Spent.TButton" if exhausted else "Revive.TButton")
-            button.state(["disabled"] if exhausted or in_check or piece not in legal_pieces or self.is_computer_turn() else ["!disabled"])
+            button.configure(style="Spent.TButton" if unavailable_by_counter else "Revive.TButton")
+            button.state(["disabled"] if unavailable_by_counter or in_check or piece not in legal_pieces or self.is_computer_turn() else ["!disabled"])
 
     def draw_board(self) -> None:
         canvas = self.board_canvas

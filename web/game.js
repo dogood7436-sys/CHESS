@@ -7,8 +7,9 @@
     wK: '♔', wQ: '♕', wR: '♖', wB: '♗', wN: '♘', wP: '♙',
     bK: '♚', bQ: '♛', bR: '♜', bB: '♝', bN: '♞', bP: '♟'
   };
-  const NAMES = { P: '폰', N: '나이트', B: '비숍', R: '룩' };
+  const NAMES = { P: '폰', N: '나이트', Q: '퀸', R: '룩' };
   const COSTS = DATA.reviveCosts;
+  const REVIVE_COUNTER_LIMIT = DATA.reviveCounterLimit;
   const CAPTURE_POINTS = DATA.capturePoints;
 
   const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -43,7 +44,7 @@
       this.turn = 'w';
       this.points = { w: 0, b: 0 };
       this.captured = { w: [], b: [] };
-      this.revivesUsed = { w: { P: 0, N: 0, BR: 0 }, b: { P: 0, N: 0, BR: 0 } };
+      this.revivesUsed = { w: 0, b: 0 };
       this.castlingRights = { w: { K: true, Q: true }, b: { K: true, Q: true } };
       this.enPassantTarget = null;
       this.halfmoveClock = 0;
@@ -90,7 +91,7 @@
       const square = this.reviveSquare(color);
       if (!square || this.board[square[0]][square[1]]) return [];
       const actions = [];
-      for (const piece of ['P', 'N', 'B', 'R']) {
+      for (const piece of ['P', 'N', 'Q', 'R']) {
         if (!this.canRevive(color, piece)) continue;
         const trial = this.copy();
         trial.applyReviveNoValidation(piece, color);
@@ -101,11 +102,7 @@
 
     canRevive(color, piece) {
       if (!Object.hasOwn(COSTS, piece) || !this.captured[color].includes(piece)) return false;
-      if (this.points[color] < COSTS[piece]) return false;
-      if (piece === 'P') return this.revivesUsed[color].P < 2;
-      if (piece === 'N') return this.revivesUsed[color].N < 1;
-      if (piece === 'B' || piece === 'R') return this.revivesUsed[color].BR < 1;
-      return false;
+      return this.revivesUsed[color] + COSTS[piece] <= REVIVE_COUNTER_LIMIT;
     }
 
     makeMove(move) {
@@ -230,11 +227,8 @@
     applyReviveNoValidation(piece, color) {
       const [r, c] = this.reviveSquare(color);
       this.board[r][c] = `${color}${piece}`;
-      this.points[color] -= COSTS[piece];
       this.captured[color].splice(this.captured[color].indexOf(piece), 1);
-      if (piece === 'P') this.revivesUsed[color].P += 1;
-      else if (piece === 'N') this.revivesUsed[color].N += 1;
-      else this.revivesUsed[color].BR += 1;
+      this.revivesUsed[color] += COSTS[piece];
       this.enPassantTarget = null;
       this.halfmoveClock += 1;
       this.moveLog.push(`${color}${piece} revived@${squareName(r, c)}`);
@@ -411,7 +405,7 @@
       return trial;
     }
     specialBonus(action) {
-      if (action.kind === 'revive') return { P: 60, N: 130, B: 150, R: 170 }[action.revive.piece] || 0;
+      if (action.kind === 'revive') return { P: 60, N: 130, Q: 220, R: 170 }[action.revive.piece] || 0;
       if (action.move?.isCastling) return 90;
       if (action.move?.isEnPassant) return 45;
       return 0;
@@ -446,6 +440,7 @@
       this.statusEl = document.querySelector('#statusText');
       this.capturedEl = document.querySelector('#capturedText');
       this.turnBadge = document.querySelector('#turnBadge');
+      this.reviveMeterEl = document.querySelector('#reviveMeter');
       this.reviveButtons = new Map([...document.querySelectorAll('[data-revive]')].map((button) => [button.dataset.revive, button]));
       this.bindEvents();
       this.render();
@@ -523,25 +518,35 @@
       this.statusEl.textContent = `Turn: ${turn}\nStatus: ${this.game.status()}\nCOMPUTER difficulty: ${this.computer ? this.difficultyValue() : '-'}\nRevive square: ${this.describeReviveSquare()}\nHalfmove clock: ${this.game.halfmoveClock}`;
       this.capturedEl.textContent = `Captured allies available for revive\nWhite: ${JSON.stringify(this.game.captured.w)}\nBlack: ${JSON.stringify(this.game.captured.b)}\nRevive counters W: ${this.reviveCounterText('w')}\nRevive counters B: ${this.reviveCounterText('b')}`;
       this.updateReviveButtons();
+      this.renderReviveMeter();
     }
-    reviveRemaining(color, piece) {
-      if (piece === 'P') return Math.max(0, 2 - this.game.revivesUsed[color].P);
-      if (piece === 'N') return Math.max(0, 1 - this.game.revivesUsed[color].N);
-      return Math.max(0, 1 - this.game.revivesUsed[color].BR);
+    reviveRemaining(color) {
+      return Math.max(0, REVIVE_COUNTER_LIMIT - this.game.revivesUsed[color]);
     }
     reviveCounterText(color) {
-      return `P ${this.reviveRemaining(color, 'P')}/2, N ${this.reviveRemaining(color, 'N')}/1, B/R ${this.reviveRemaining(color, 'B')}/1`;
+      return `${this.reviveMeterHtml(color)} (${this.game.revivesUsed[color]}/${REVIVE_COUNTER_LIMIT})`;
+    }
+    reviveMeterHtml(color) {
+      return [...Array(REVIVE_COUNTER_LIMIT)].map((_, index) => index < this.game.revivesUsed[color] ? '●' : '○').join('');
+    }
+    renderReviveMeter() {
+      this.reviveMeterEl.innerHTML = '';
+      for (let index = 0; index < REVIVE_COUNTER_LIMIT; index += 1) {
+        const circle = document.createElement('span');
+        circle.className = `meter-circle ${index < this.game.revivesUsed[this.game.turn] ? 'used' : 'empty'}`;
+        this.reviveMeterEl.append(circle);
+      }
     }
     updateReviveButtons() {
       const legalPieces = new Set(this.game.legalRevives(this.game.turn).map((action) => action.piece));
       const inCheck = this.game.inCheck(this.game.turn);
       for (const [piece, button] of this.reviveButtons.entries()) {
-        const remaining = this.reviveRemaining(this.game.turn, piece);
-        const exhausted = remaining === 0;
-        button.textContent = `${NAMES[piece]} · ${COSTS[piece]}점 · 남은 ${remaining}회`;
+        const remaining = this.reviveRemaining(this.game.turn);
+        const exhausted = remaining < COSTS[piece];
+        button.textContent = `${NAMES[piece]} · ${COSTS[piece]}칸 · 남은 ${remaining}칸`;
         button.classList.toggle('spent', exhausted);
         button.disabled = exhausted || inCheck || !legalPieces.has(piece) || this.isComputerTurn();
-        button.title = inCheck ? '체크 상태에서는 부활할 수 없습니다.' : exhausted ? '부활 카운터를 모두 사용했습니다.' : '';
+        button.title = inCheck ? '체크 상태에서는 부활할 수 없습니다.' : exhausted ? '남은 부활 카운트가 부족합니다.' : '';
       }
     }
     renderBoard() {
