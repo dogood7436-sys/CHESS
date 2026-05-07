@@ -13,23 +13,20 @@
   const CAPTURE_POINTS = DATA.capturePoints;
   const SKILL_CARDS = [
     { id: 'valiant_warrior', name: '용맹한 전사', type: '액티브', uses: '1회 사용 가능', description: '폰이 정면의 상대 말을 잡을 수 있습니다.' },
-    { id: 'wedge_charge', name: '쐐기 돌진', type: '액티브', uses: '1회 사용 가능', description: '나이트가 직선 방향 2칸 안에 있는 말을 잡을 수 있습니다.' },
-    { id: 'brilliant_scheme', name: '비상한 계책', type: '패시브', description: '자신의 부활 카운터가 1개 증가합니다.' },
-    { id: 'wicked_scheme', name: '사악한 술수', type: '패시브', description: '상대의 부활 카운터가 1개 감소합니다.' },
     { id: 'iron_empress', name: '철혈의 여제', type: '액티브', uses: '1회 사용 가능', description: '퀸이 죽은 턴에 아군 나이트 하나를 지우고 퀸을 킹 앞에서 부활시킵니다.' },
     { id: 'knight_king', name: '기사왕', type: '액티브', uses: '1회 사용 가능', description: '킹이 직선 거리의 말을 잡을 수 있습니다. 상대 킹에게는 사용할 수 없습니다.' },
-    { id: 'trickster', name: '트릭스터', type: '액티브', uses: '3턴마다 사용 가능', description: '비숍이 직선 거리 한 칸을 이동할 수 있습니다.' },
-    { id: 'destroyer_chariot', name: '파괴전차', type: '패시브', description: '룩이 적 말을 잡으면 다음 자신의 턴까지 상대 룩과 비숍은 자신의 룩을 잡을 수 없습니다.' }
+    { id: 'trickster', name: '트릭스터', type: '액티브', uses: '1회 사용 가능', description: '비숍이 직선 거리 한 칸을 이동할 수 있습니다.' },
+    { id: 'destroyer_chariot', name: '파괴전차', type: '액티브', uses: '1회 사용 가능', description: '룩이 적 말을 잡은 뒤, 다음 자신의 턴까지 상대 룩과 비숍은 자신의 룩을 잡을 수 없습니다.' }
   ];
   const clone = (value) => JSON.parse(JSON.stringify(value));
   const opposite = (color) => color === 'w' ? 'b' : 'w';
   const inBounds = (r, c) => r >= 0 && r < 8 && c >= 0 && c < 8;
   const squareName = (r, c) => `${FILES[c]}${8 - r}`;
   const cardKind = (card) => card?.type || '액티브';
-  const isPassiveCard = (card) => cardKind(card) === '패시브';
   const randomCardId = () => SKILL_CARDS[Math.floor(Math.random() * SKILL_CARDS.length)].id;
-  const randomCards = () => ({ w: randomCardId(), b: randomCardId() });
-  const MOVE_SKILL_CARDS = new Set(['valiant_warrior', 'wedge_charge', 'knight_king', 'trickster']);
+  const randomCard = () => ({ id: randomCardId(), used: false, revealed: false });
+  const randomCardSlots = () => ({ w: [randomCard()], b: [randomCard()] });
+  const MOVE_SKILL_CARDS = new Set(['valiant_warrior', 'knight_king', 'trickster']);
   const homeKingSquare = (color) => color === 'w' ? [7, 4] : [0, 4];
   const homeRookSquare = (color, side) => [color === 'w' ? 7 : 0, side === 'K' ? 7 : 0];
 
@@ -60,14 +57,12 @@
       this.points = { w: 0, b: 0 };
       this.captured = { w: [], b: [] };
       this.revivesUsed = { w: 0, b: 0 };
-      this.selectedCards = randomCards();
-      this.usedCards = { w: false, b: false };
+      this.cardSlots = randomCardSlots();
+      this.skillCardsAwarded = { w: false, b: false };
       this.activeCardArmed = { w: null, b: null };
-      this.reviveLimitBonus = { w: 0, b: 0 };
-      this.tricksterCooldown = { w: 0, b: 0 };
+      this.destroyerReady = { w: false, b: false };
       this.rookProtection = { w: 0, b: 0 };
       this.queenReviveWindow = { w: false, b: false };
-      this.applyAssignedPassiveCards();
       this.castlingRights = { w: { K: true, Q: true }, b: { K: true, Q: true } };
       this.enPassantTarget = null;
       this.halfmoveClock = 0;
@@ -84,11 +79,10 @@
       game.points = clone(this.points);
       game.captured = clone(this.captured);
       game.revivesUsed = clone(this.revivesUsed);
-      game.selectedCards = clone(this.selectedCards);
-      game.usedCards = clone(this.usedCards);
+      game.cardSlots = clone(this.cardSlots);
+      game.skillCardsAwarded = clone(this.skillCardsAwarded);
       game.activeCardArmed = clone(this.activeCardArmed);
-      game.reviveLimitBonus = clone(this.reviveLimitBonus);
-      game.tricksterCooldown = clone(this.tricksterCooldown);
+      game.destroyerReady = clone(this.destroyerReady);
       game.rookProtection = clone(this.rookProtection);
       game.queenReviveWindow = clone(this.queenReviveWindow);
       game.castlingRights = clone(this.castlingRights);
@@ -132,7 +126,7 @@
 
     canRevive(color, piece) {
       if (!Object.hasOwn(COSTS, piece) || !this.captured[color].includes(piece)) return false;
-      return this.revivesUsed[color] + COSTS[piece] <= this.effectiveReviveLimit(color);
+      return this.revivesUsed[color] + COSTS[piece] <= REVIVE_COUNTER_LIMIT;
     }
 
     makeMove(move) {
@@ -198,7 +192,7 @@
       const board = this.board.map((row) => row.map((piece) => piece || '--').join('')).join('/');
       const rights = ['wK', 'wQ', 'bK', 'bQ'].filter((right) => this.castlingRights[right[0]][right[1]]).join('') || '-';
       const ep = this.enPassantTarget ? squareName(...this.enPassantTarget) : '-';
-      const variant = `wp${this.points.w}bp${this.points.b}|wc${[...this.captured.w].sort().join('')}|bc${[...this.captured.b].sort().join('')}|wr${JSON.stringify(this.revivesUsed.w)}|br${JSON.stringify(this.revivesUsed.b)}|rl${JSON.stringify(this.reviveLimitBonus)}`;
+      const variant = `wp${this.points.w}bp${this.points.b}|wc${[...this.captured.w].sort().join('')}|bc${[...this.captured.b].sort().join('')}|wr${JSON.stringify(this.revivesUsed.w)}|br${JSON.stringify(this.revivesUsed.b)}|cards${JSON.stringify(this.cardSlots)}`;
       return `${board} ${this.turn} ${rights} ${ep} ${variant}`;
     }
 
@@ -206,39 +200,36 @@
       const previous = opposite(this.turn);
       this.activeCardArmed[previous] = null;
       this.queenReviveWindow[previous] = false;
-      if (this.tricksterCooldown[this.turn] > 0) this.tricksterCooldown[this.turn] -= 1;
       if (this.rookProtection[this.turn] > 0) this.rookProtection[this.turn] -= 1;
       if (this.turn === 'w') this.fullmoveNumber += 1;
       const key = this.positionKey();
       this.positionCounts[key] = (this.positionCounts[key] || 0) + 1;
     }
 
-    effectiveReviveLimit(color) {
-      return Math.max(0, REVIVE_COUNTER_LIMIT + this.reviveLimitBonus[color]);
+    effectiveReviveLimit(_color) {
+      return REVIVE_COUNTER_LIMIT;
     }
 
     resetSkillState() {
-      this.usedCards = { w: false, b: false };
+      this.cardSlots = randomCardSlots();
+      this.skillCardsAwarded = { w: false, b: false };
       this.activeCardArmed = { w: null, b: null };
-      this.reviveLimitBonus = { w: 0, b: 0 };
-      this.tricksterCooldown = { w: 0, b: 0 };
+      this.destroyerReady = { w: false, b: false };
       this.rookProtection = { w: 0, b: 0 };
       this.queenReviveWindow = { w: false, b: false };
-      this.applyAssignedPassiveCards();
     }
 
-    applyAssignedPassiveCards() {
-      for (const color of ['w', 'b']) {
-        const card = this.selectedCard(color);
-        if (card?.id === 'brilliant_scheme') {
-          this.reviveLimitBonus[color] += 1;
-          this.usedCards[color] = true;
-        }
-        if (card?.id === 'wicked_scheme') {
-          this.reviveLimitBonus[opposite(color)] -= 1;
-          this.usedCards[color] = true;
-        }
+    maybeAwardSkillCard(color) {
+      if (this.points[color] >= 20 && !this.skillCardsAwarded[color] && this.cardSlots[color].length < 2) {
+        this.cardSlots[color].push(randomCard());
+        this.skillCardsAwarded[color] = true;
+        this.moveLog.push(`${color} gained a 20 kill point skill card`);
       }
+    }
+
+    addKillPoints(color, capturedKind) {
+      this.points[color] += CAPTURE_POINTS[capturedKind] || 0;
+      this.maybeAwardSkillCard(color);
     }
 
     applyMoveNoValidation(move) {
@@ -262,10 +253,10 @@
       this.enPassantTarget = null;
       if (piece[1] === 'P' && Math.abs(er - sr) === 2) this.enPassantTarget = [(sr + er) / 2, sc];
       if (capturedPiece) {
-        this.points[piece[0]] += CAPTURE_POINTS[capturedPiece[1]] || 0;
+        this.addKillPoints(piece[0], capturedPiece[1]);
         this.captured[capturedPiece[0]].push(capturedPiece[1]);
         if (capturedPiece[1] === 'Q') this.queenReviveWindow[capturedPiece[0]] = true;
-        if (piece[1] === 'R' && this.selectedCards[piece[0]] === 'destroyer_chariot') this.rookProtection[piece[0]] = 1;
+        if (piece[1] === 'R' && this.hasUnusedCard(piece[0], 'destroyer_chariot')) this.destroyerReady[piece[0]] = true;
         this.moveLog.push(`${piece}@${squareName(sr, sc)}x${capturedPiece}@${squareName(...capturedSquare)}`);
       } else {
         this.moveLog.push(`${piece}@${squareName(sr, sc)}-${squareName(er, ec)}`);
@@ -329,18 +320,6 @@
         }
       } else if (kind === 'N') {
         for (const [dr, dc] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]) this.addIfValid(moves, color, kind, r, c, r + dr, c + dc);
-        if (this.cardReady(color, 'wedge_charge')) {
-          for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
-            for (const distance of [1, 2]) {
-              const tr = r + dr * distance, tc = c + dc * distance;
-              if (!inBounds(tr, tc)) break;
-              const target = this.board[tr][tc];
-              if (!target) continue;
-              if (target[0] === enemy && target[1] !== 'K') moves.push(new Move([r, c], [tr, tc], { skillCard: 'wedge_charge' }));
-              break;
-            }
-          }
-        }
       } else if (['B', 'R', 'Q'].includes(kind)) {
         const dirs = [];
         if (kind === 'B' || kind === 'Q') dirs.push([-1,-1],[-1,1],[1,-1],[1,1]);
@@ -436,42 +415,58 @@
     }
 
     hasUnusedCard(color, id = null) {
-      return !this.usedCards[color] && (!id || this.selectedCards[color] === id);
+      return this.cardSlots[color].some((slot) => !slot.used && (!id || slot.id === id));
     }
 
     cardReady(color, id) {
-      if (this.selectedCards[color] !== id) return false;
-      if (id === 'trickster') return this.activeCardArmed[color] === id && this.tricksterCooldown[color] === 0;
-      return this.activeCardArmed[color] === id && !this.usedCards[color];
+      return this.activeCardArmed[color]?.id === id;
     }
 
-    consumeCard(color) {
-      this.usedCards[color] = true;
-      this.activeCardArmed[color] = null;
+    cardById(id) {
+      return SKILL_CARDS.find((card) => card.id === id);
     }
 
-    consumeSkillCard(color, id) {
-      this.activeCardArmed[color] = null;
-      if (id === 'trickster') {
-        this.tricksterCooldown[color] = 3;
-        return;
-      }
-      this.usedCards[color] = true;
+    cardAt(color, slotIndex) {
+      const slot = this.cardSlots[color][slotIndex];
+      if (!slot) return null;
+      return { ...this.cardById(slot.id), ...slot, slotIndex };
     }
 
     selectedCard(color) {
-      return SKILL_CARDS.find((card) => card.id === this.selectedCards[color]);
+      const slotIndex = this.cardSlots[color].findIndex((slot) => !slot.used);
+      return slotIndex >= 0 ? this.cardAt(color, slotIndex) : this.cardAt(color, 0);
     }
 
-    activateCard(color) {
-      const card = this.selectedCard(color);
+    consumeCard(color, slotIndex) {
+      const slot = this.cardSlots[color][slotIndex];
+      if (!slot) return;
+      slot.used = true;
+      slot.revealed = true;
+      this.activeCardArmed[color] = null;
+    }
+
+    consumeSkillCard(color, _id) {
+      const armed = this.activeCardArmed[color];
+      if (!armed) return;
+      this.consumeCard(color, armed.slotIndex);
+    }
+
+    activateCard(color, slotIndex = 0) {
+      const card = this.cardAt(color, slotIndex);
       if (!card) return { ok: false, message: '기술 카드가 없습니다.' };
-      if (isPassiveCard(card)) return { ok: false, message: '패시브 카드는 조건에 따라 자동 적용됩니다.' };
-      if (card.id === 'trickster' && this.tricksterCooldown[color] > 0) return { ok: false, message: `트릭스터 재사용까지 ${this.tricksterCooldown[color]}턴 남았습니다.` };
-      if (card.id !== 'trickster' && this.usedCards[color]) return { ok: false, message: '이미 사용한 기술 카드입니다.' };
+      if (card.used) return { ok: false, message: '이미 사용한 기술 카드입니다.' };
       if (MOVE_SKILL_CARDS.has(card.id)) {
-        this.activeCardArmed[color] = card.id;
+        this.cardSlots[color][slotIndex].revealed = true;
+        this.activeCardArmed[color] = { id: card.id, slotIndex };
         return { ok: true, message: `${card.name} 발동 준비! 기술 이동할 말을 선택하세요.` };
+      }
+      if (card.id === 'destroyer_chariot') {
+        if (!this.destroyerReady[color]) return { ok: false, message: '룩이 적 말을 잡은 뒤에만 사용할 수 있습니다.' };
+        this.rookProtection[color] = 1;
+        this.destroyerReady[color] = false;
+        this.consumeCard(color, slotIndex);
+        this.moveLog.push(`${color} card:${card.name}`);
+        return { ok: true, message: `${card.name} 발동!` };
       }
       if (card.id === 'iron_empress') {
         const square = this.reviveSquare(color);
@@ -484,7 +479,7 @@
         this.captured[color].splice(this.captured[color].indexOf('Q'), 1);
         this.board[square[0]][square[1]] = `${color}Q`;
         this.queenReviveWindow[color] = false;
-        this.consumeCard(color);
+        this.consumeCard(color, slotIndex);
         this.moveLog.push(`${color} card:${card.name}`);
         return { ok: true, message: `${card.name} 발동!` };
       }
@@ -686,7 +681,7 @@
       this.capturedEl = document.querySelector('#capturedText');
       this.turnBadge = document.querySelector('#turnBadge');
       this.cardTextEl = document.querySelector('#cardText');
-      this.activateCardButton = document.querySelector('#activateCard');
+      this.cardButtonsEl = document.querySelector('#cardButtons');
       this.reviveMeterEl = document.querySelector('#reviveMeter');
       this.reviveButtons = new Map([...document.querySelectorAll('[data-revive]')].map((button) => [button.dataset.revive, button]));
       this.bindEvents();
@@ -695,7 +690,6 @@
     bindEvents() {
       document.querySelector('#newGame').addEventListener('click', () => this.newGame());
       document.querySelector('#enableSound').addEventListener('click', () => { this.audio.ensure(); this.audio.updateBgm(this.totalPoints()); });
-      this.activateCardButton.addEventListener('click', () => this.onActivateCard());
       document.querySelector('#difficulty').addEventListener('change', () => this.newGame());
       document.querySelectorAll('input[name="opponent"]').forEach((input) => input.addEventListener('change', () => this.newGame()));
       document.querySelectorAll('[data-revive]').forEach((button) => button.addEventListener('click', () => this.onRevive(button.dataset.revive)));
@@ -707,7 +701,6 @@
       this.game = new ChessGame();
       this.selected = null;
       this.legalTargets = new Map();
-      this.game.selectedCards = randomCards();
       this.game.resetSkillState();
       this.computer = this.opponentValue() === 'COMPUTER' ? new ComputerPlayer('b', this.difficultyValue()) : null;
       this.render();
@@ -749,10 +742,10 @@
         alert('잡힌 말, 남은 카운트, 위치 또는 체크 상태 때문에 부활할 수 없습니다.');
       }
     }
-    onActivateCard() {
+    onActivateCard(slotIndex) {
       if (this.isComputerTurn()) return;
       this.audio.ensure();
-      const result = this.game.activateCard(this.game.turn);
+      const result = this.game.activateCard(this.game.turn, slotIndex);
       if (!result.ok) {
         alert(result.message);
         return;
@@ -768,11 +761,6 @@
     }
     computerTurn() {
       if (!this.isComputerTurn()) return;
-      const card = this.game.selectedCard(this.game.turn);
-      if (card && !isPassiveCard(card) && !this.game.usedCards[this.game.turn]) {
-        const cardResult = this.game.activateCard(this.game.turn);
-        if (cardResult.ok) this.audio.play('card');
-      }
       const action = this.computer.chooseAction(this.game);
       if (action.kind === 'move') {
         const [er, ec] = action.move.end;
@@ -800,30 +788,47 @@
       document.querySelector('#blackScore').textContent = this.game.points.b;
       this.statusEl.textContent = `Turn: ${turn}\nStatus: ${this.game.status()}\nCOMPUTER difficulty: ${this.computer ? this.difficultyValue() : '-'}\nRevive square: ${this.describeReviveSquare()}\nHalfmove clock: ${this.game.halfmoveClock}`;
       this.cardTextEl.textContent = this.cardStatusText();
-      const currentCard = this.game.selectedCard(this.game.turn);
-      this.activateCardButton.disabled = this.isComputerTurn() || isPassiveCard(currentCard) || this.game.activeCardArmed[this.game.turn] || (currentCard?.id === 'trickster' ? this.game.tricksterCooldown[this.game.turn] > 0 : this.game.usedCards[this.game.turn]);
+      this.renderCardButtons();
       this.audio.updateBgm(this.totalPoints());
-      this.capturedEl.textContent = `Captured allies available for revive\nWhite: ${JSON.stringify(this.game.captured.w)}\nBlack: ${JSON.stringify(this.game.captured.b)}\nRevive counters W: ${this.reviveCounterText('w')}\nRevive counters B: ${this.reviveCounterText('b')}`;
+      this.capturedEl.textContent = `Captured allies available for revive\nWhite: ${JSON.stringify(this.game.captured.w)}\nBlack: ${JSON.stringify(this.game.captured.b)}\nPublic revive counters W: ${this.reviveCounterText('w')}\nPublic revive counters B: ${this.reviveCounterText('b')}`;
       this.updateReviveButtons();
       this.renderReviveMeter();
     }
+    renderCardButtons() {
+      this.cardButtonsEl.innerHTML = '';
+      this.game.cardSlots[this.game.turn].forEach((slot, index) => {
+        const card = this.game.cardAt(this.game.turn, index);
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'card-action';
+        button.textContent = `${card.name} 발동`;
+        button.disabled = this.isComputerTurn() || card.used || this.game.activeCardArmed[this.game.turn] || !this.cardActivatable(this.game.turn, card);
+        button.addEventListener('click', () => this.onActivateCard(index));
+        this.cardButtonsEl.append(button);
+      });
+    }
+    cardActivatable(color, card) {
+      if (!card || card.used) return false;
+      if (card.id === 'destroyer_chariot') return this.game.destroyerReady[color];
+      return true;
+    }
     cardStatusText() {
       const line = (color, label) => {
-        const card = this.game.selectedCard(color);
-        const state = this.cardUseState(color, card);
-        return `${label}: ${card?.name || '-'} · ${cardKind(card)}${card?.uses ? ` · ${card.uses}` : ''} · ${state}
-${card?.description || ''}`;
+        const cards = this.game.cardSlots[color].map((slot, index) => {
+          const card = this.game.cardAt(color, index);
+          const visible = color === this.game.turn || slot.revealed || slot.used;
+          if (!visible) return `카드 ${index + 1}: 비공개`;
+          return `카드 ${index + 1}: ${card.name} · ${cardKind(card)} · ${card.uses} · ${this.cardUseState(color, card)}\n${card.description}`;
+        }).join('\n');
+        return `${label}: 킬 포인트 ${this.game.points[color]} / 20 보상 ${this.game.skillCardsAwarded[color] ? '획득 완료' : '대기'}\n${cards || '카드 없음'}`;
       };
-      return `${line('w', 'White')}
-
-${line('b', 'Black')}`;
+      return `${line('w', 'White')}\n\n${line('b', 'Black')}`;
     }
     cardUseState(color, card) {
       if (!card) return '-';
-      if (this.game.activeCardArmed[color]) return '발동 중';
-      if (card.id === 'trickster' && this.game.tricksterCooldown[color] > 0) return `${this.game.tricksterCooldown[color]}턴 후 사용 가능`;
-      if (isPassiveCard(card)) return this.game.usedCards[color] ? '적용 완료' : '상시 적용';
-      return this.game.usedCards[color] ? '사용 완료' : '사용 가능';
+      if (this.game.activeCardArmed[color]?.slotIndex === card.slotIndex) return '발동 중';
+      if (card.id === 'destroyer_chariot' && !this.game.destroyerReady[color] && !card.used) return '룩 포획 후 사용 가능';
+      return card.used ? '사용 완료/공개' : card.revealed ? '공개됨' : '비공개 보유';
     }
     reviveRemaining(color) {
       return Math.max(0, this.game.effectiveReviveLimit(color) - this.game.revivesUsed[color]);

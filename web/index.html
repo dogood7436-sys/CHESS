@@ -42,14 +42,14 @@
       <div class="field-label">기술 카드는 새 게임마다 White/Black에게 랜덤으로 지급됩니다.</div>
       <button id="newGame" class="primary">새 게임</button>
       <button id="enableSound" class="secondary">사운드 켜기</button>
-      <button id="activateCard" class="card-action">기술 카드 발동</button>
+      <div id="cardButtons" class="card-buttons" aria-label="기술 카드 발동 버튼"></div>
 
       <div class="stat-card" id="cardText"></div>
       <div class="stat-card" id="statusText"></div>
       <div class="meter-card"><span>부활 카운트</span><div id="reviveMeter" class="revive-meter" aria-label="Revive counter meter"></div></div>
       <div class="score-grid">
-        <div><span>White</span><strong id="whiteScore">0</strong></div>
-        <div><span>Black</span><strong id="blackScore">0</strong></div>
+        <div><span>White 킬 포인트</span><strong id="whiteScore">0</strong></div>
+        <div><span>Black 킬 포인트</span><strong id="blackScore">0</strong></div>
       </div>
 
       <h3>부활</h3>

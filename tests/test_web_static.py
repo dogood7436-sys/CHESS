@@ -62,27 +62,30 @@ def test_web_uses_shared_five_count_revive_system() -> None:
     assert 'data-revive="Q"' not in html
 
 
-def test_web_has_requested_eight_random_skill_cards_and_audio_system() -> None:
+def test_web_has_requested_hidden_skill_cards_and_kill_point_reward() -> None:
     game_js = (WEB / "game.js").read_text(encoding="utf-8")
     html = (WEB / "index.html").read_text(encoding="utf-8")
 
-    assert game_js.count("id: '") == 8
+    assert game_js.count("id: '") == 5
     for card_id in [
         "valiant_warrior",
-        "wedge_charge",
-        "brilliant_scheme",
-        "wicked_scheme",
         "iron_empress",
         "knight_king",
         "trickster",
         "destroyer_chariot",
     ]:
         assert card_id in game_js
-    assert "type: '패시브'" in game_js
+    for removed_card_id in ["wedge_charge", "brilliant_scheme", "wicked_scheme"]:
+        assert removed_card_id not in game_js
     assert "type: '액티브'" in game_js
+    assert "type: '패시브'" not in game_js
     assert "1회 사용 가능" in game_js
-    assert "3턴마다 사용 가능" in game_js
-    assert "randomCards()" in game_js
+    assert "3턴마다 사용 가능" not in game_js
+    assert "maybeAwardSkillCard" in game_js
+    assert "this.points[color] >= 20" in game_js
+    assert "cardSlots" in game_js
+    assert "비공개" in game_js
+    assert "cardButtons" in game_js
     assert "selectedCardsFromUi" not in game_js
     assert "pawn_forward_strike" not in game_js
     assert "supply_pawn" not in game_js
@@ -92,5 +95,7 @@ def test_web_has_requested_eight_random_skill_cards_and_audio_system() -> None:
     assert "play(kind)" in game_js
     assert 'id="whiteCard"' not in html
     assert 'id="blackCard"' not in html
+    assert 'id="cardButtons"' in html
+    assert "킬 포인트" in html
     assert "랜덤으로 지급" in html
     assert 'id="enableSound"' in html

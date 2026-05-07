@@ -178,7 +178,8 @@ button:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.
 button:disabled { cursor: not-allowed; filter: saturate(.65); opacity: .72; }
 .primary { margin-top: 12px; color: #141414; background: linear-gradient(135deg, var(--gold), var(--gold-soft)); }
 .secondary { margin-top: 8px; background: linear-gradient(135deg, #244769, #17283F); }
-.card-action { margin-top: 8px; background: linear-gradient(135deg, #6B4BD8, #273C75); }
+.card-buttons { display:grid; grid-template-columns: 1fr; gap: 8px; margin-top: 8px; }
+.card-action { margin-top: 0; background: linear-gradient(135deg, #6B4BD8, #273C75); }
 .stat-card {
   margin-top: 18px;
   padding: 14px;
