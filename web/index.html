@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Revive Chess HTML</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <section class="board-card">
+      <div class="brand-row">
+        <div>
+          <p class="eyebrow">LOCAL HTML EDITION</p>
+          <h1>Revive Chess</h1>
+        </div>
+        <div id="turnBadge" class="turn-badge">White</div>
+      </div>
+      <div id="board" class="board ornate-board-frame" aria-label="Revive Chess board"></div>
+      <div class="legend">
+        <span><b class="dot legal"></b>이동</span>
+        <span><b class="dot capture"></b>공격/앙파상</span>
+        <span><b class="dot revive"></b>부활 위치</span>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <p class="eyebrow">MODE</p>
+      <h2>Game Control</h2>
+      <label class="field-label">상대 선택</label>
+      <div class="segmented">
+        <label><input type="radio" name="opponent" value="USER" /> <span>USER</span></label>
+        <label><input type="radio" name="opponent" value="COMPUTER" checked /> <span>COMPUTER</span></label>
+      </div>
+
+      <label class="field-label" for="difficulty">COMPUTER 난이도</label>
+      <select id="difficulty">
+        <option>초급자</option>
+        <option selected>중급자</option>
+        <option>상급자</option>
+      </select>
+      <div class="field-label">기술 카드는 새 게임마다 White/Black에게 랜덤으로 지급됩니다.</div>
+      <button id="newGame" class="primary">새 게임</button>
+      <button id="enableSound" class="secondary">사운드 켜기</button>
+      <div id="cardButtons" class="card-buttons" aria-label="기술 카드 발동 버튼"></div>
+
+      <div class="stat-card" id="cardText"></div>
+      <div class="stat-card" id="statusText"></div>
+      <div class="meter-card public-revive-card" aria-label="Public revive counters">
+        <span>공개 부활 카운터</span>
+        <div class="public-revive-row" data-color="w"><strong>White</strong><div id="whiteReviveMeter" class="revive-meter" aria-label="White revive counter meter"></div></div>
+        <div class="public-revive-row" data-color="b"><strong>Black</strong><div id="blackReviveMeter" class="revive-meter" aria-label="Black revive counter meter"></div></div>
+      </div>
+      <div class="score-grid">
+        <div><span>White 킬 포인트</span><strong id="whiteScore">0</strong></div>
+        <div><span>Black 킬 포인트</span><strong id="blackScore">0</strong></div>
+      </div>
+
+      <h3>부활</h3>
+      <div class="revive-buttons">
+        <button data-revive="P"><span class="revive-piece-name">폰</span><span class="revive-cost-meter" aria-label="폰 부활 비용"></span></button>
+        <button data-revive="N"><span class="revive-piece-name">나이트</span><span class="revive-cost-meter" aria-label="나이트 부활 비용"></span></button>
+        <button data-revive="B"><span class="revive-piece-name">비숍</span><span class="revive-cost-meter" aria-label="비숍 부활 비용"></span></button>
+        <button data-revive="R"><span class="revive-piece-name">룩</span><span class="revive-cost-meter" aria-label="룩 부활 비용"></span></button>
+      </div>
+      <p class="note">게임 로직과 AI 데이터는 이 폴더의 HTML/JS 파일에서 로컬로 실행됩니다. 인터넷 연결이 필요 없습니다.</p>
+    </aside>
+  </main>
+
+  <script src="ai-data.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
