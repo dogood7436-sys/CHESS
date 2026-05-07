@@ -57,3 +57,17 @@ def test_computer_selects_local_action() -> None:
     action = computer.choose_action(game)
 
     assert action.kind in {"move", "revive"}
+
+
+def test_revive_is_not_allowed_while_in_check() -> None:
+    game = ChessGame()
+    game.board = [[None] * 8 for _ in range(8)]
+    game.board[7][4] = "wK"
+    game.board[0][0] = "bK"
+    game.board[0][4] = "bR"
+    game.points["w"] = 10
+    game.captured["w"] = ["P"]
+    game.position_counts = {game.position_key(): 1}
+
+    assert game.in_check("w")
+    assert game.legal_revives("w") == []

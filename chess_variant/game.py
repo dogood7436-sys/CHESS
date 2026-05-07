@@ -76,6 +76,8 @@ class ChessGame:
 
     def legal_revives(self, color: str | None = None) -> list[ReviveAction]:
         color = color or self.turn
+        if self.in_check(color):
+            return []
         square = self.revive_square(color)
         if square is None or self.board[square[0]][square[1]] is not None:
             return []

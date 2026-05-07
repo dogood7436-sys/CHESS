@@ -86,6 +86,7 @@
     }
 
     legalRevives(color = this.turn) {
+      if (this.inCheck(color)) return [];
       const square = this.reviveSquare(color);
       if (!square || this.board[square[0]][square[1]]) return [];
       const actions = [];
@@ -445,6 +446,7 @@
       this.statusEl = document.querySelector('#statusText');
       this.capturedEl = document.querySelector('#capturedText');
       this.turnBadge = document.querySelector('#turnBadge');
+      this.reviveButtons = new Map([...document.querySelectorAll('[data-revive]')].map((button) => [button.dataset.revive, button]));
       this.bindEvents();
       this.render();
     }
@@ -519,7 +521,28 @@
       document.querySelector('#whiteScore').textContent = this.game.points.w;
       document.querySelector('#blackScore').textContent = this.game.points.b;
       this.statusEl.textContent = `Turn: ${turn}\nStatus: ${this.game.status()}\nCOMPUTER difficulty: ${this.computer ? this.difficultyValue() : '-'}\nRevive square: ${this.describeReviveSquare()}\nHalfmove clock: ${this.game.halfmoveClock}`;
-      this.capturedEl.textContent = `Captured allies available for revive\nWhite: ${JSON.stringify(this.game.captured.w)}\nBlack: ${JSON.stringify(this.game.captured.b)}\nRevives used W: ${JSON.stringify(this.game.revivesUsed.w)}\nRevives used B: ${JSON.stringify(this.game.revivesUsed.b)}`;
+      this.capturedEl.textContent = `Captured allies available for revive\nWhite: ${JSON.stringify(this.game.captured.w)}\nBlack: ${JSON.stringify(this.game.captured.b)}\nRevive counters W: ${this.reviveCounterText('w')}\nRevive counters B: ${this.reviveCounterText('b')}`;
+      this.updateReviveButtons();
+    }
+    reviveRemaining(color, piece) {
+      if (piece === 'P') return Math.max(0, 2 - this.game.revivesUsed[color].P);
+      if (piece === 'N') return Math.max(0, 1 - this.game.revivesUsed[color].N);
+      return Math.max(0, 1 - this.game.revivesUsed[color].BR);
+    }
+    reviveCounterText(color) {
+      return `P ${this.reviveRemaining(color, 'P')}/2, N ${this.reviveRemaining(color, 'N')}/1, B/R ${this.reviveRemaining(color, 'B')}/1`;
+    }
+    updateReviveButtons() {
+      const legalPieces = new Set(this.game.legalRevives(this.game.turn).map((action) => action.piece));
+      const inCheck = this.game.inCheck(this.game.turn);
+      for (const [piece, button] of this.reviveButtons.entries()) {
+        const remaining = this.reviveRemaining(this.game.turn, piece);
+        const exhausted = remaining === 0;
+        button.textContent = `${NAMES[piece]} · ${COSTS[piece]}점 · 남은 ${remaining}회`;
+        button.classList.toggle('spent', exhausted);
+        button.disabled = exhausted || inCheck || !legalPieces.has(piece) || this.isComputerTurn();
+        button.title = inCheck ? '체크 상태에서는 부활할 수 없습니다.' : exhausted ? '부활 카운터를 모두 사용했습니다.' : '';
+      }
     }
     renderBoard() {
       this.boardEl.innerHTML = '';

@@ -43,6 +43,7 @@ class ChessVariantApp(tk.Tk):
         self.status_var = tk.StringVar()
         self.points_var = tk.StringVar()
         self.captured_var = tk.StringVar()
+        self.revive_buttons: dict[str, ttk.Button] = {}
         self._configure_style()
         self._build_layout()
         self.refresh()
@@ -59,7 +60,9 @@ class ChessVariantApp(tk.Tk):
         style.configure("Accent.TButton", background=GOLD, foreground="#1B1B1B", font=("Segoe UI", 10, "bold"), padding=8)
         style.map("Accent.TButton", background=[("active", "#FFD966")])
         style.configure("Revive.TButton", background=PANEL_ALT, foreground=TEXT, font=("Segoe UI", 10, "bold"), padding=7)
-        style.map("Revive.TButton", background=[("active", "#2F456A")])
+        style.map("Revive.TButton", background=[("active", "#2F456A"), ("disabled", "#34425B")], foreground=[("disabled", "#9AA7BB")])
+        style.configure("Spent.TButton", background="#4B2630", foreground="#C8A0A8", font=("Segoe UI", 10, "bold"), padding=7)
+        style.map("Spent.TButton", background=[("disabled", "#4B2630")], foreground=[("disabled", "#C8A0A8")])
         style.configure("TRadiobutton", background=PANEL, foreground=TEXT, font=("Segoe UI", 10))
         style.map("TRadiobutton", background=[("active", PANEL)], foreground=[("active", TEXT)])
         style.configure("TCombobox", fieldbackground="#0F1726", background=PANEL_ALT, foreground=TEXT, arrowcolor=GOLD)
@@ -102,7 +105,9 @@ class ChessVariantApp(tk.Tk):
         self._separator(side, 12)
         ttk.Label(side, text="부활", style="Panel.TLabel").grid(row=13, column=0, sticky="w", pady=(10, 4))
         for idx, piece in enumerate(("P", "N", "B", "R"), start=14):
-            ttk.Button(side, text=self.revive_label(piece), command=lambda p=piece: self.on_revive(p), style="Revive.TButton").grid(row=idx, column=0, sticky="ew", pady=2)
+            button = ttk.Button(side, text=self.revive_label(piece), command=lambda p=piece: self.on_revive(p), style="Revive.TButton")
+            button.grid(row=idx, column=0, sticky="ew", pady=2)
+            self.revive_buttons[piece] = button
         ttk.Label(
             side,
             text=(
@@ -119,7 +124,15 @@ class ChessVariantApp(tk.Tk):
 
     def revive_label(self, piece: str) -> str:
         names = {"P": "폰", "N": "나이트", "B": "비숍", "R": "룩"}
-        return f"{names[piece]} 부활  ·  {REVIVE_COSTS[piece]}점"
+        remaining = self.revive_remaining(self.game.turn, piece)
+        return f"{names[piece]} 부활  ·  {REVIVE_COSTS[piece]}점  ·  남은 {remaining}회"
+
+    def revive_remaining(self, color: str, piece: str) -> int:
+        if piece == "P":
+            return max(0, 2 - self.game.revives_used[color]["P"])
+        if piece == "N":
+            return max(0, 1 - self.game.revives_used[color]["N"])
+        return max(0, 1 - self.game.revives_used[color]["BR"])
 
     def new_game(self) -> None:
         self.game = ChessGame()
@@ -203,8 +216,21 @@ class ChessVariantApp(tk.Tk):
         self.captured_var.set(
             "Captured allies available for revive\n"
             f"White: {self.game.captured['w']}\nBlack: {self.game.captured['b']}\n"
-            f"Revives used W: {self.game.revives_used['w']}\nRevives used B: {self.game.revives_used['b']}"
+            f"Revive counters W: {self.revive_counter_text('w')}\nRevive counters B: {self.revive_counter_text('b')}"
         )
+        self.update_revive_buttons()
+
+    def revive_counter_text(self, color: str) -> str:
+        return f"P {self.revive_remaining(color, 'P')}/2, N {self.revive_remaining(color, 'N')}/1, B/R {self.revive_remaining(color, 'B')}/1"
+
+    def update_revive_buttons(self) -> None:
+        legal_pieces = {action.piece for action in self.game.legal_revives(self.game.turn)}
+        in_check = self.game.in_check(self.game.turn)
+        for piece, button in self.revive_buttons.items():
+            exhausted = self.revive_remaining(self.game.turn, piece) == 0
+            button.configure(text=self.revive_label(piece))
+            button.configure(style="Spent.TButton" if exhausted else "Revive.TButton")
+            button.state(["disabled"] if exhausted or in_check or piece not in legal_pieces or self.is_computer_turn() else ["!disabled"])
 
     def draw_board(self) -> None:
         canvas = self.board_canvas

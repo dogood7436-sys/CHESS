@@ -35,3 +35,14 @@ def test_html_board_size_is_fixed_in_css() -> None:
     assert "aspect-ratio" not in css
     assert "font-size: clamp" not in css
     assert ".app-shell { grid-template-columns: 1fr" not in css
+
+
+def test_web_revive_ui_has_counters_and_check_lockout() -> None:
+    game_js = (WEB / "game.js").read_text(encoding="utf-8")
+    css = (WEB / "styles.css").read_text(encoding="utf-8")
+
+    assert "if (this.inCheck(color)) return []" in game_js
+    assert "updateReviveButtons" in game_js
+    assert "남은 ${remaining}" in game_js
+    assert "button.disabled = exhausted || inCheck" in game_js
+    assert ".revive-buttons button.spent" in css

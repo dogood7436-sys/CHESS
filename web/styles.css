@@ -174,7 +174,8 @@ select {
   border: 1px solid rgba(255,255,255,.12);
 }
 button { padding: 12px; color: var(--text); background: var(--panel-2); font-weight: 900; cursor: pointer; transition: transform .12s ease, filter .12s ease; }
-button:hover { transform: translateY(-1px); filter: brightness(1.08); }
+button:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.08); }
+button:disabled { cursor: not-allowed; filter: saturate(.65); opacity: .72; }
 .primary { margin-top: 12px; color: #141414; background: linear-gradient(135deg, var(--gold), var(--gold-soft)); }
 .stat-card {
   margin-top: 18px;
@@ -191,6 +192,8 @@ button:hover { transform: translateY(-1px); filter: brightness(1.08); }
 .score-grid span { display:block; color: var(--muted); font-size: 12px; font-weight: 900; }
 .score-grid strong { display:block; font-size: 30px; color: var(--gold); }
 .revive-buttons { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.revive-buttons button { background: linear-gradient(135deg, #253A5E, #1B2A44); }
+.revive-buttons button.spent { color: #F0BDC7; background: linear-gradient(135deg, #5B2733, #351A24); }
 .note { margin-top: 18px; color: var(--muted); font-size: 13px; line-height: 1.55; }
 @media (max-width: 1080px) {
   body { overflow-x: auto; }
