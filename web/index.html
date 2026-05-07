@@ -46,7 +46,11 @@
 
       <div class="stat-card" id="cardText"></div>
       <div class="stat-card" id="statusText"></div>
-      <div class="meter-card"><span>부활 카운트</span><div id="reviveMeter" class="revive-meter" aria-label="Revive counter meter"></div></div>
+      <div class="meter-card public-revive-card" aria-label="Public revive counters">
+        <span>공개 부활 카운터</span>
+        <div class="public-revive-row" data-color="w"><strong>White</strong><div id="whiteReviveMeter" class="revive-meter" aria-label="White revive counter meter"></div></div>
+        <div class="public-revive-row" data-color="b"><strong>Black</strong><div id="blackReviveMeter" class="revive-meter" aria-label="Black revive counter meter"></div></div>
+      </div>
       <div class="score-grid">
         <div><span>White 킬 포인트</span><strong id="whiteScore">0</strong></div>
         <div><span>Black 킬 포인트</span><strong id="blackScore">0</strong></div>
@@ -54,13 +58,11 @@
 
       <h3>부활</h3>
       <div class="revive-buttons">
-        <button data-revive="P">폰 · 1칸 · 남은 5칸</button>
-        <button data-revive="N">나이트 · 2칸 · 남은 5칸</button>
-        <button data-revive="B">비숍 · 3칸 · 남은 5칸</button>
-        <button data-revive="R">룩 · 3칸 · 남은 5칸</button>
+        <button data-revive="P"><span class="revive-piece-name">폰</span><span class="revive-cost-meter" aria-label="폰 부활 비용"></span></button>
+        <button data-revive="N"><span class="revive-piece-name">나이트</span><span class="revive-cost-meter" aria-label="나이트 부활 비용"></span></button>
+        <button data-revive="B"><span class="revive-piece-name">비숍</span><span class="revive-cost-meter" aria-label="비숍 부활 비용"></span></button>
+        <button data-revive="R"><span class="revive-piece-name">룩</span><span class="revive-cost-meter" aria-label="룩 부활 비용"></span></button>
       </div>
-
-      <div class="stat-card small" id="capturedText"></div>
       <p class="note">게임 로직과 AI 데이터는 이 폴더의 HTML/JS 파일에서 로컬로 실행됩니다. 인터넷 연결이 필요 없습니다.</p>
     </aside>
   </main>

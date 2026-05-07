@@ -678,11 +678,13 @@
       this.audio = new AudioManager();
       this.boardEl = document.querySelector('#board');
       this.statusEl = document.querySelector('#statusText');
-      this.capturedEl = document.querySelector('#capturedText');
       this.turnBadge = document.querySelector('#turnBadge');
       this.cardTextEl = document.querySelector('#cardText');
       this.cardButtonsEl = document.querySelector('#cardButtons');
-      this.reviveMeterEl = document.querySelector('#reviveMeter');
+      this.publicReviveMeterEls = {
+        w: document.querySelector('#whiteReviveMeter'),
+        b: document.querySelector('#blackReviveMeter')
+      };
       this.reviveButtons = new Map([...document.querySelectorAll('[data-revive]')].map((button) => [button.dataset.revive, button]));
       this.bindEvents();
       this.render();
@@ -790,9 +792,8 @@
       this.cardTextEl.textContent = this.cardStatusText();
       this.renderCardButtons();
       this.audio.updateBgm(this.totalPoints());
-      this.capturedEl.textContent = `Captured allies available for revive\nWhite: ${JSON.stringify(this.game.captured.w)}\nBlack: ${JSON.stringify(this.game.captured.b)}\nPublic revive counters W: ${this.reviveCounterText('w')}\nPublic revive counters B: ${this.reviveCounterText('b')}`;
       this.updateReviveButtons();
-      this.renderReviveMeter();
+      this.renderReviveMeters();
     }
     renderCardButtons() {
       this.cardButtonsEl.innerHTML = '';
@@ -833,18 +834,29 @@
     reviveRemaining(color) {
       return Math.max(0, this.game.effectiveReviveLimit(color) - this.game.revivesUsed[color]);
     }
-    reviveCounterText(color) {
-      return `${this.reviveMeterHtml(color)} (${this.game.revivesUsed[color]}/${this.game.effectiveReviveLimit(color)})`;
-    }
-    reviveMeterHtml(color) {
-      return [...Array(this.game.effectiveReviveLimit(color))].map((_, index) => index < this.game.revivesUsed[color] ? '●' : '○').join('');
-    }
-    renderReviveMeter() {
-      this.reviveMeterEl.innerHTML = '';
-      for (let index = 0; index < this.game.effectiveReviveLimit(this.game.turn); index += 1) {
+    renderReviveMeter(element, color) {
+      if (!element) return;
+      element.innerHTML = '';
+      for (let index = 0; index < this.game.effectiveReviveLimit(color); index += 1) {
         const circle = document.createElement('span');
-        circle.className = `meter-circle ${index < this.game.revivesUsed[this.game.turn] ? 'used' : 'empty'}`;
-        this.reviveMeterEl.append(circle);
+        circle.className = `meter-circle ${index < this.game.revivesUsed[color] ? 'used' : 'empty'}`;
+        element.append(circle);
+      }
+    }
+    renderReviveMeters() {
+      for (const color of ['w', 'b']) {
+        this.renderReviveMeter(this.publicReviveMeterEls[color], color);
+        document.querySelector(`.public-revive-row[data-color="${color}"]`)?.classList.toggle('active', color === this.game.turn);
+      }
+    }
+    renderReviveCost(button, piece) {
+      const costMeter = button.querySelector('.revive-cost-meter');
+      if (!costMeter) return;
+      costMeter.innerHTML = '';
+      for (let index = 0; index < 3; index += 1) {
+        const circle = document.createElement('span');
+        circle.className = `cost-circle ${index < COSTS[piece] ? 'needed' : 'empty'}`;
+        costMeter.append(circle);
       }
     }
     updateReviveButtons() {
@@ -853,10 +865,11 @@
       for (const [piece, button] of this.reviveButtons.entries()) {
         const remaining = this.reviveRemaining(this.game.turn);
         const exhausted = remaining < COSTS[piece];
-        button.textContent = `${NAMES[piece]} · ${COSTS[piece]}칸 · 남은 ${remaining}칸`;
+        button.querySelector('.revive-piece-name').textContent = NAMES[piece];
+        this.renderReviveCost(button, piece);
         button.classList.toggle('spent', exhausted);
         button.disabled = exhausted || inCheck || !legalPieces.has(piece) || this.isComputerTurn();
-        button.title = inCheck ? '체크 상태에서는 부활할 수 없습니다.' : exhausted ? '남은 부활 카운트가 부족합니다.' : '';
+        button.title = inCheck ? '체크 상태에서는 부활할 수 없습니다.' : exhausted ? '남은 부활 카운트가 부족합니다.' : `${NAMES[piece]} 부활`;
       }
     }
     renderBoard() {

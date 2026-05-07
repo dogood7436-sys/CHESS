@@ -43,11 +43,17 @@ def test_web_revive_ui_has_counters_and_check_lockout() -> None:
 
     assert "if (this.inCheck(color)) return []" in game_js
     assert "updateReviveButtons" in game_js
-    assert "renderReviveMeter" in game_js
+    assert "renderReviveMeters" in game_js
+    assert "renderReviveCost" in game_js
     assert "REVIVE_COUNTER_LIMIT" in game_js
-    assert "남은 ${remaining}" in game_js
     assert "button.disabled = exhausted || inCheck" in game_js
+    assert "capturedText" not in game_js
+    assert "Captured allies available for revive" not in game_js
+    assert "남은 ${remaining}" not in game_js
     assert ".revive-buttons button.spent" in css
+    assert ".revive-cost-meter" in css
+    assert ".cost-circle.needed" in css
+    assert ".public-revive-row" in css
     assert "ornate-board-frame" in css
     assert "radial-gradient(circle at 50% 42%" in css
     assert ".meter-circle.used" in css
@@ -63,6 +69,11 @@ def test_web_uses_shared_five_count_revive_system() -> None:
     assert "reviveLimits" not in data
     assert 'data-revive="B"' in html
     assert 'data-revive="Q"' not in html
+    assert 'id="whiteReviveMeter"' in html
+    assert 'id="blackReviveMeter"' in html
+    assert 'id="capturedText"' not in html
+    assert "폰 ·" not in html
+    assert "남은 5칸" not in html
 
 
 def test_web_has_requested_hidden_skill_cards_and_kill_point_reward() -> None:
